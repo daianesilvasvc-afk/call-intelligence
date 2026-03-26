@@ -15,11 +15,20 @@ export const SDRS: SDR[] = [
   { name: 'Lais',                    email: 'laispodiumeducacao@gmail.com' },
 ]
 
-// Set of emails for fast O(1) lookup
-export const SDR_EMAILS = new Set(SDRS.map(s => s.email.toLowerCase()))
+// Match both full email (edrius.podiumedu@gmail.com) and username (edrius.podiumedu)
+// because API4COM sometimes returns only the username portion
+function normalize(s: string) { return s.toLowerCase().split('@')[0] }
 
-// Returns SDR name by email, or null if not an SDR
-export function getSdrName(email: string): string | null {
-  const found = SDRS.find(s => s.email.toLowerCase() === email.toLowerCase())
+const SDR_USERNAMES = new Set(SDRS.map(s => normalize(s.email)))
+
+export function isSdr(emailOrUsername: string): boolean {
+  if (!emailOrUsername) return false
+  return SDR_USERNAMES.has(normalize(emailOrUsername))
+}
+
+// Returns SDR name by email or username
+export function getSdrName(emailOrUsername: string): string | null {
+  const key = normalize(emailOrUsername)
+  const found = SDRS.find(s => normalize(s.email) === key)
   return found?.name ?? null
 }

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { getSetting, upsertCall, getCallByCallId } from '@/lib/db'
 import { fetchAllCalls } from '@/lib/api4com'
-import { SDR_EMAILS, getSdrName } from '@/lib/sdrs'
+import { isSdr, getSdrName } from '@/lib/sdrs'
 
 export async function POST() {
   const token = getSetting('api4com_token')
@@ -11,7 +11,7 @@ export async function POST() {
   }
 
   try {
-    const calls = await fetchAllCalls(token, 5)
+    const calls = await fetchAllCalls(token, 20)
 
     let imported = 0
     let skipped = 0
@@ -19,7 +19,7 @@ export async function POST() {
 
     for (const c of calls) {
       // Only import calls from the registered SDR team
-      if (!c.email || !SDR_EMAILS.has(c.email.toLowerCase())) {
+      if (!isSdr(c.email)) {
         notSdr++
         continue
       }
