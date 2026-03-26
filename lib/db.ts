@@ -153,7 +153,17 @@ export function getStats(sdr?: string) {
 
 // --- Settings ---
 
+// Env var names for each setting key (Railway/production)
+const ENV_MAP: Record<string, string> = {
+  api4com_token: 'API4COM_TOKEN',
+  groq_api_key: 'GROQ_API_KEY',
+}
+
 export function getSetting(key: string): string | null {
+  // Check environment variable first (Railway production)
+  const envKey = ENV_MAP[key]
+  if (envKey && process.env[envKey]) return process.env[envKey]!
+  // Fall back to database (local dev via settings UI)
   const row = getDb().prepare('SELECT value FROM settings WHERE key = ?').get(key) as any
   return row?.value ?? null
 }
