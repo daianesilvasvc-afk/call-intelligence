@@ -276,6 +276,7 @@ function Dashboard() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const activeSdr = searchParams.get('sdr') || ''
+  const activeDate = searchParams.get('date') || ''
 
   const [data, setData] = useState<ApiResponse | null>(null)
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -288,7 +289,10 @@ function Dashboard() {
 
   const fetchData = useCallback(async () => {
     try {
-      const qs = activeSdr ? `?sdr=${encodeURIComponent(activeSdr)}` : ''
+      const params = new URLSearchParams()
+      if (activeSdr) params.set('sdr', activeSdr)
+      if (activeDate) params.set('date', activeDate)
+      const qs = params.toString() ? `?${params.toString()}` : ''
       const [callsRes, settingsRes] = await Promise.all([
         fetch(`/api/calls${qs}`),
         fetch('/api/settings'),
@@ -300,7 +304,7 @@ function Dashboard() {
     } finally {
       setLoading(false)
     }
-  }, [activeSdr])
+  }, [activeSdr, activeDate])
 
   useEffect(() => {
     fetchData()
@@ -339,6 +343,13 @@ function Dashboard() {
     }
   }
 
+  function buildUrl(sdr: string, date: string) {
+    const p = new URLSearchParams()
+    if (sdr) p.set('sdr', sdr)
+    if (date) p.set('date', date)
+    return p.toString() ? `/?${p.toString()}` : '/'
+  }
+
   const isConfigured = settings?.api4com_token && settings?.groq_api_key
   const calls = data?.calls ?? []
   const stats = data?.stats
@@ -369,31 +380,52 @@ function Dashboard() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-8">
-        {/* SDR filter */}
-        <div className="flex items-center gap-2 mb-6 flex-wrap">
-          <button
-            onClick={() => router.push('/')}
-            className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${
-              !activeSdr
-                ? 'bg-blue-600 border-blue-500 text-white'
-                : 'bg-gray-900 border-gray-700 text-gray-400 hover:text-white hover:border-gray-500'
-            }`}
-          >
-            Todos
-          </button>
-          {SDRS.map(sdr => (
+        {/* Filters */}
+        <div className="flex flex-col gap-3 mb-6">
+          {/* SDR filter */}
+          <div className="flex items-center gap-2 flex-wrap">
             <button
-              key={sdr.email}
-              onClick={() => router.push(`/?sdr=${encodeURIComponent(sdr.name)}`)}
+              onClick={() => router.push(buildUrl('', activeDate))}
               className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${
-                activeSdr === sdr.name
+                !activeSdr
                   ? 'bg-blue-600 border-blue-500 text-white'
                   : 'bg-gray-900 border-gray-700 text-gray-400 hover:text-white hover:border-gray-500'
               }`}
             >
-              {sdr.name.split(' ')[0]}
+              Todos
             </button>
-          ))}
+            {SDRS.map(sdr => (
+              <button
+                key={sdr.email}
+                onClick={() => router.push(buildUrl(sdr.name, activeDate))}
+                className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${
+                  activeSdr === sdr.name
+                    ? 'bg-blue-600 border-blue-500 text-white'
+                    : 'bg-gray-900 border-gray-700 text-gray-400 hover:text-white hover:border-gray-500'
+                }`}
+              >
+                {sdr.name.split(' ')[0]}
+              </button>
+            ))}
+          </div>
+
+          {/* Date filter */}
+          <div className="flex items-center gap-3">
+            <input
+              type="date"
+              value={activeDate}
+              onChange={e => router.push(buildUrl(activeSdr, e.target.value))}
+              className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]"
+            />
+            {activeDate && (
+              <button
+                onClick={() => router.push(buildUrl(activeSdr, ''))}
+                className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1.5 rounded-lg border border-gray-800 hover:border-gray-600 transition-colors"
+              >
+                ✕ Limpar data
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Setup banner */}

@@ -8,8 +8,9 @@ export async function GET(req: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0')
 
     const sdr = searchParams.get('sdr') || undefined
-    const calls = getCalls(limit, offset, sdr)
-    const stats = getStats(sdr)
+    const date = searchParams.get('date') || undefined  // format: YYYY-MM-DD
+    const calls = getCalls(limit, offset, sdr, date)
+    const stats = getStats(sdr, date)
 
     return NextResponse.json({ calls, stats })
   } catch (err) {

@@ -114,16 +114,24 @@ export function updateCallAnalysis(id: string, data: {
   )
 }
 
-export function getCalls(limit = 100, offset = 0, sdr?: string): Call[] {
+export function getCalls(limit = 100, offset = 0, sdr?: string, date?: string): Call[] {
+  const conditions: string[] = []
+  const params: unknown[] = []
+
   if (sdr) {
-    return getDb().prepare(`
-      SELECT * FROM calls WHERE caller = ? OR called = ?
-      ORDER BY started_at DESC LIMIT ? OFFSET ?
-    `).all(sdr, sdr, limit, offset) as Call[]
+    conditions.push('(caller = ? OR called = ?)')
+    params.push(sdr, sdr)
   }
+  if (date) {
+    conditions.push("date(started_at) = ?")
+    params.push(date)
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+  params.push(limit, offset)
   return getDb().prepare(`
-    SELECT * FROM calls ORDER BY started_at DESC LIMIT ? OFFSET ?
-  `).all(limit, offset) as Call[]
+    SELECT * FROM calls ${where} ORDER BY started_at DESC LIMIT ? OFFSET ?
+  `).all(...params) as Call[]
 }
 
 export function getCallById(id: string): Call | null {
@@ -134,21 +142,25 @@ export function getCallByCallId(callId: string): Call | null {
   return getDb().prepare('SELECT * FROM calls WHERE call_id = ?').get(callId) as Call | null
 }
 
-export function getStats(sdr?: string) {
+export function getStats(sdr?: string, date?: string) {
   const db = getDb()
-  if (sdr) {
-    const args = [sdr, sdr]
-    const total = (db.prepare(`SELECT COUNT(*) as c FROM calls WHERE (caller = ? OR called = ?)`).get(...args) as any).c
-    const today = (db.prepare(`SELECT COUNT(*) as c FROM calls WHERE (caller = ? OR called = ?) AND date(started_at) = date('now')`).get(...args) as any).c
-    const done = (db.prepare(`SELECT COUNT(*) as c FROM calls WHERE (caller = ? OR called = ?) AND status = 'done'`).get(...args) as any).c
-    const processing = (db.prepare(`SELECT COUNT(*) as c FROM calls WHERE (caller = ? OR called = ?) AND status IN ('pending','processing')`).get(...args) as any).c
-    return { total, today, done, processing }
+
+  function count(extra: string, ...args: unknown[]) {
+    const conditions: string[] = []
+    const params: unknown[] = []
+    if (sdr) { conditions.push('(caller = ? OR called = ?)'); params.push(sdr, sdr) }
+    if (date) { conditions.push('date(started_at) = ?'); params.push(date) }
+    if (extra) { conditions.push(extra); params.push(...args) }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+    return (db.prepare(`SELECT COUNT(*) as c FROM calls ${where}`).get(...params) as any).c as number
   }
-  const total = (db.prepare('SELECT COUNT(*) as c FROM calls').get() as any).c
-  const today = (db.prepare(`SELECT COUNT(*) as c FROM calls WHERE date(started_at) = date('now')`).get() as any).c
-  const done = (db.prepare(`SELECT COUNT(*) as c FROM calls WHERE status = 'done'`).get() as any).c
-  const processing = (db.prepare(`SELECT COUNT(*) as c FROM calls WHERE status IN ('pending','processing')`).get() as any).c
-  return { total, today, done, processing }
+
+  return {
+    total:      count(''),
+    today:      count("date(started_at) = date('now')"),
+    done:       count("status = 'done'"),
+    processing: count("status IN ('pending','processing')"),
+  }
 }
 
 // --- Settings ---
