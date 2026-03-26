@@ -18,8 +18,9 @@ export async function POST() {
     let notSdr = 0
 
     for (const c of calls) {
-      // Only import calls from the registered SDR team
-      if (!isSdr(c.email)) {
+      // Some SDRs use the main account email — match by first_name (username) as fallback
+      const sdrIdentifier = isSdr(c.email) ? c.email : (isSdr(c.first_name) ? c.first_name : null)
+      if (!sdrIdentifier) {
         notSdr++
         continue
       }
@@ -32,7 +33,7 @@ export async function POST() {
 
       // Use official SDR name (from our list) rather than whatever the API returns
       const apiName = [c.first_name, c.last_name].filter(Boolean).join(' ') || c.email
-      const sdrName = getSdrName(c.email) ?? apiName
+      const sdrName = getSdrName(sdrIdentifier) ?? apiName
 
       upsertCall({
         id: randomUUID(),
