@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCallById, updateCallAnalysis, getSetting } from '@/lib/db'
 import { transcribeAudio } from '@/lib/transcribe'
 import { analyzeCall } from '@/lib/analyze'
+import callEvents from '@/lib/events'
 
 export async function POST(
   _req: NextRequest,
@@ -54,8 +55,10 @@ async function processCall(
       qualification: JSON.stringify(analysis.qualification),
       status: 'done',
     })
+    callEvents.emit('call_updated', id)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     updateCallAnalysis(id, { status: 'error', error: msg })
+    callEvents.emit('call_updated', id)
   }
 }

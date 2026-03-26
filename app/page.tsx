@@ -443,10 +443,28 @@ function Dashboard() {
     }
   }, [activeSdr, activeDate])
 
+  // Initial load + SSE for real-time updates
   useEffect(() => {
     fetchData()
-    const t = setInterval(fetchData, 8000)
-    return () => clearInterval(t)
+
+    const sse = new EventSource('/api/stream')
+
+    sse.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data)
+        if (msg.type === 'call_updated') fetchData()
+      } catch { /* ignore */ }
+    }
+
+    // Fallback polling if SSE disconnects (every 15s)
+    const fallback = setInterval(() => {
+      if (sse.readyState === EventSource.CLOSED) fetchData()
+    }, 15_000)
+
+    return () => {
+      sse.close()
+      clearInterval(fallback)
+    }
   }, [fetchData])
 
   async function handleSync() {
