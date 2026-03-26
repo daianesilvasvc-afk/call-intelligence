@@ -135,9 +135,23 @@ function CopyButton({ text }: { text: string }) {
 }
 
 // ─── Call Detail Modal ───────────────────────────────────────────────────────
+// ─── Qualification Badge ──────────────────────────────────────────────────────
+function QBool({ value, label }: { value: boolean | null; label: string }) {
+  const icon = value === true ? '✅' : value === false ? '❌' : '⚠️'
+  const cls = value === true
+    ? 'text-emerald-400'
+    : value === false
+    ? 'text-red-400'
+    : 'text-yellow-400'
+  return (
+    <span className={`text-sm ${cls}`}>{icon} {label}</span>
+  )
+}
+
 function CallModal({ call, onClose }: { call: Call; onClose: () => void }) {
   const followUps: string[] = call.follow_ups ? JSON.parse(call.follow_ups) : []
   const keyPoints: string[] = call.key_points ? JSON.parse(call.key_points) : []
+  const q = call.qualification ? JSON.parse(call.qualification) : null
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto">
@@ -206,6 +220,98 @@ function CallModal({ call, onClose }: { call: Call; onClose: () => void }) {
               </div>
             </section>
           )}
+          {q && (
+            <section className="bg-gray-900/60 border border-gray-700 rounded-xl p-5 space-y-4">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">🔍 Qualificação do Lead</h3>
+
+              {/* Validações rápidas */}
+              <div className="flex flex-wrap gap-x-5 gap-y-2">
+                <QBool value={q.cnpj_validated} label="CNPJ validado" />
+                <QBool value={q.revenue_validated} label="Faturamento validado" />
+                <QBool value={q.team_size_validated} label="Equipe validada" />
+                {q.revenue_below_10k === true && (
+                  <QBool value={q.cash_reserve_validated} label="Caixa para investir validado" />
+                )}
+              </div>
+
+              {/* Alerta crítico */}
+              {q.revenue_below_10k === true && q.cash_reserve_validated !== true && (
+                <div className="bg-red-950/40 border border-red-700/50 rounded-lg px-4 py-2.5 text-sm text-red-300 font-medium">
+                  ⚠️ REGRA CRÍTICA: Faturamento abaixo de R$10k — caixa para investir não validado
+                </div>
+              )}
+
+              {/* Desqualificação */}
+              {q.disqualification_reason && (
+                <div className="bg-red-950/40 border border-red-700/50 rounded-lg px-4 py-2.5">
+                  <p className="text-xs text-red-400 font-semibold uppercase mb-1">Motivo de Desqualificação</p>
+                  <p className="text-red-300 text-sm">{q.disqualification_reason}</p>
+                </div>
+              )}
+
+              {/* Grid de dados */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="bg-gray-800/50 rounded-lg p-3">
+                  <p className="text-xs text-gray-500 mb-0.5">💰 Faturamento mensal</p>
+                  <p className="text-white text-sm font-medium">{q.monthly_revenue}</p>
+                </div>
+                <div className="bg-gray-800/50 rounded-lg p-3">
+                  <p className="text-xs text-gray-500 mb-0.5">👥 Tamanho da equipe</p>
+                  <p className="text-white text-sm font-medium">{q.team_size}</p>
+                </div>
+                <div className="bg-gray-800/50 rounded-lg p-3">
+                  <p className="text-xs text-gray-500 mb-0.5">📅 Gerou agendamento?</p>
+                  <p className={`text-sm font-medium ${q.generated_meeting ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {q.generated_meeting ? '✅ Sim' : '❌ Não'}
+                    {q.meeting_note ? ` — ${q.meeting_note}` : ''}
+                  </p>
+                </div>
+                <div className="bg-gray-800/50 rounded-lg p-3">
+                  <p className="text-xs text-gray-500 mb-0.5">📊 Maturidade do barbeiro</p>
+                  <p className="text-white text-sm font-medium">{q.maturity_level}</p>
+                  {q.maturity_justification && (
+                    <p className="text-gray-500 text-xs mt-0.5">{q.maturity_justification}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Queixas */}
+              {q.main_complaints?.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 mb-2">😣 Principal queixa / dificuldade</p>
+                  <ul className="space-y-1">
+                    {q.main_complaints.map((c: string, i: number) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+                        <span className="text-orange-400 mt-0.5">→</span>{c}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Decisor */}
+              <div className="border border-gray-700 rounded-lg p-3">
+                <p className="text-xs text-gray-500 mb-2">🧠 Decisor na ligação</p>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className={`text-sm font-bold px-3 py-1 rounded-full border ${
+                    q.decision_maker === 'CONFIRMADO'
+                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                      : q.decision_maker === 'PARCIAL'
+                      ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40'
+                      : q.decision_maker === 'DESQUALIFICADO'
+                      ? 'bg-red-500/20 text-red-400 border-red-500/40'
+                      : 'bg-gray-700 text-gray-400 border-gray-600'
+                  }`}>
+                    {q.decision_maker}
+                  </span>
+                  {q.decision_maker_note && (
+                    <p className="text-gray-400 text-sm">{q.decision_maker_note}</p>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+
           {followUps.length > 0 && (
             <section>
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Próximos Passos</h3>

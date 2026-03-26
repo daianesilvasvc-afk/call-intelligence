@@ -4,6 +4,24 @@ function getGroq() {
   return new Groq({ apiKey: process.env.GROQ_API_KEY })
 }
 
+export interface Qualification {
+  cnpj_validated: boolean | null
+  revenue_validated: boolean | null
+  team_size_validated: boolean | null
+  revenue_below_10k: boolean | null
+  cash_reserve_validated: boolean | null
+  disqualification_reason: string | null
+  monthly_revenue: string
+  team_size: string
+  main_complaints: string[]
+  generated_meeting: boolean
+  meeting_note: string
+  maturity_level: 'Baixo (Operacional)' | 'Médio (Dono de Cadeira)' | 'Alto (Empreendedor)' | 'Não identificado'
+  maturity_justification: string
+  decision_maker: 'CONFIRMADO' | 'PARCIAL' | 'NÃO MAPEADO' | 'DESQUALIFICADO'
+  decision_maker_note: string
+}
+
 export interface CallAnalysis {
   summary: string
   closer_briefing: string
@@ -11,6 +29,7 @@ export interface CallAnalysis {
   sentiment: 'positivo' | 'neutro' | 'negativo'
   key_points: string[]
   whatsapp_msg: string
+  qualification: Qualification
 }
 
 export async function analyzeCall(
@@ -41,7 +60,25 @@ JSON esperado:
 
   "follow_ups": ["ação de follow-up 1", "ação de follow-up 2", "ação de follow-up 3"],
   "sentiment": "positivo",
-  "key_points": ["ponto-chave 1", "ponto-chave 2", "ponto-chave 3"]
+  "key_points": ["ponto-chave 1", "ponto-chave 2", "ponto-chave 3"],
+
+  "qualification": {
+    "cnpj_validated": true,
+    "revenue_validated": true,
+    "team_size_validated": false,
+    "revenue_below_10k": false,
+    "cash_reserve_validated": null,
+    "disqualification_reason": null,
+    "monthly_revenue": "R$ 25.000",
+    "team_size": "4 barbeiros",
+    "main_complaints": ["dificuldade para reter clientes", "depende da presença do dono"],
+    "generated_meeting": true,
+    "meeting_note": "Reunião agendada para quinta-feira às 14h",
+    "maturity_level": "Médio (Dono de Cadeira)",
+    "maturity_justification": "Tem visão de crescimento mas ainda opera no operacional",
+    "decision_maker": "CONFIRMADO",
+    "decision_maker_note": "É o dono e demonstrou autonomia total para decidir"
+  }
 }
 
 REGRAS IMPORTANTES:
@@ -49,7 +86,18 @@ REGRAS IMPORTANTES:
 - No campo "whatsapp_msg": substitua APENAS [primeiro nome do lead], [dia da semana], [data por extenso], [horário] e [dor principal do lead] com o que foi extraído da transcrição. Mantenha [Nome do Especialista] e [link Google Meet] como estão (serão preenchidos manualmente).
 - Se data/horário do agendamento não foi mencionado na ligação, deixe como [data e horário a confirmar].
 - Se alguma informação do briefing não foi mencionada, escreva "Não mencionado na ligação".
-- Use as próprias palavras do lead nas dores — não generalize.`
+- Use as próprias palavras do lead nas dores — não generalize.
+- No campo "qualification":
+  • cnpj_validated/revenue_validated/team_size_validated: true se o SDR perguntou e obteve resposta, false se perguntou mas não obteve, null se não perguntou.
+  • revenue_below_10k: true se faturamento mencionado < R$10.000, false se >= R$10.000, null se não mencionado.
+  • cash_reserve_validated: true/false se o SDR perguntou sobre caixa (apenas quando revenue_below_10k = true), null nos demais casos.
+  • disqualification_reason: null se lead está qualificado, caso contrário descreva o motivo.
+  • monthly_revenue: valor exato mencionado ou "não identificado".
+  • team_size: número mencionado ou "não citado".
+  • main_complaints: array com as dificuldades reais relatadas (mínimo 1, máximo 5).
+  • generated_meeting: true se agendamento confirmado, false se não.
+  • maturity_level: exatamente um de: "Baixo (Operacional)", "Médio (Dono de Cadeira)", "Alto (Empreendedor)", "Não identificado".
+  • decision_maker: exatamente um de: "CONFIRMADO", "PARCIAL", "NÃO MAPEADO", "DESQUALIFICADO".`
 
   const response = await getGroq().chat.completions.create({
     model: 'llama-3.3-70b-versatile',

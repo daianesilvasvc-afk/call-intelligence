@@ -37,6 +37,7 @@ function initSchema(db: Database.Database) {
       sentiment TEXT,
       key_points TEXT,
       whatsapp_msg TEXT,
+      qualification TEXT,
       status TEXT DEFAULT 'pending',
       error TEXT,
       created_at TEXT DEFAULT (datetime('now'))
@@ -68,6 +69,7 @@ export interface Call {
   sentiment: string | null
   key_points: string | null
   whatsapp_msg: string | null
+  qualification: string | null
   status: CallStatus
   error: string | null
   created_at: string
@@ -75,7 +77,7 @@ export interface Call {
 
 // --- Calls ---
 
-export function upsertCall(call: Omit<Call, 'created_at' | 'transcript' | 'summary' | 'closer_briefing' | 'follow_ups' | 'sentiment' | 'key_points' | 'whatsapp_msg' | 'error'>): void {
+export function upsertCall(call: Omit<Call, 'created_at' | 'transcript' | 'summary' | 'closer_briefing' | 'follow_ups' | 'sentiment' | 'key_points' | 'whatsapp_msg' | 'qualification' | 'error'>): void {
   const db = getDb()
   db.prepare(`
     INSERT INTO calls (id, call_id, caller, called, direction, started_at, ended_at, duration, record_url, status)
@@ -96,12 +98,14 @@ export function updateCallAnalysis(id: string, data: {
   sentiment?: string
   key_points?: string
   whatsapp_msg?: string
+  qualification?: string
   status: CallStatus
   error?: string
 }): void {
   const db = getDb()
-  // Add whatsapp_msg column if it doesn't exist yet (migration)
+  // Migrations for new columns
   try { db.exec(`ALTER TABLE calls ADD COLUMN whatsapp_msg TEXT`) } catch {}
+  try { db.exec(`ALTER TABLE calls ADD COLUMN qualification TEXT`) } catch {}
   db.prepare(`
     UPDATE calls SET
       transcript = COALESCE(?, transcript),
@@ -111,12 +115,13 @@ export function updateCallAnalysis(id: string, data: {
       sentiment = COALESCE(?, sentiment),
       key_points = COALESCE(?, key_points),
       whatsapp_msg = COALESCE(?, whatsapp_msg),
+      qualification = COALESCE(?, qualification),
       status = ?, error = ?
     WHERE id = ?
   `).run(
     data.transcript ?? null, data.summary ?? null, data.closer_briefing ?? null,
     data.follow_ups ?? null, data.sentiment ?? null, data.key_points ?? null,
-    data.whatsapp_msg ?? null,
+    data.whatsapp_msg ?? null, data.qualification ?? null,
     data.status, data.error ?? null, id
   )
 }
