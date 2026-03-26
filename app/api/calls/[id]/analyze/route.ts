@@ -50,6 +50,7 @@ async function processCall(
       follow_ups: JSON.stringify(analysis.follow_ups),
       sentiment: analysis.sentiment,
       key_points: JSON.stringify(analysis.key_points),
+      whatsapp_msg: analysis.whatsapp_msg,
       status: 'done',
     })
   } catch (err) {

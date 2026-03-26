@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useState, useEffect, useCallback, Suspense, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import type { Call } from '@/lib/db'
 import { SDRS } from '@/lib/sdrs'
@@ -116,6 +116,24 @@ function SettingsModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
   )
 }
 
+// ─── Copy button ─────────────────────────────────────────────────────────────
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  async function handleCopy() {
+    await navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  return (
+    <button
+      onClick={handleCopy}
+      className="text-xs px-3 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-600/30 transition-colors font-medium"
+    >
+      {copied ? '✓ Copiado!' : '📋 Copiar mensagem'}
+    </button>
+  )
+}
+
 // ─── Call Detail Modal ───────────────────────────────────────────────────────
 function CallModal({ call, onClose }: { call: Call; onClose: () => void }) {
   const followUps: string[] = call.follow_ups ? JSON.parse(call.follow_ups) : []
@@ -143,6 +161,19 @@ function CallModal({ call, onClose }: { call: Call; onClose: () => void }) {
               <p className="text-gray-300 leading-relaxed">{call.summary}</p>
             </section>
           )}
+
+          {call.whatsapp_msg && (
+            <section className="bg-emerald-950/30 border border-emerald-800/40 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
+                  💬 WhatsApp · Confirmação Imediata
+                </h3>
+                <CopyButton text={call.whatsapp_msg} />
+              </div>
+              <pre className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap font-sans">{call.whatsapp_msg}</pre>
+            </section>
+          )}
+
           {keyPoints.length > 0 && (
             <section>
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Pontos-chave</h3>

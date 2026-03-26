@@ -36,6 +36,7 @@ function initSchema(db: Database.Database) {
       follow_ups TEXT,
       sentiment TEXT,
       key_points TEXT,
+      whatsapp_msg TEXT,
       status TEXT DEFAULT 'pending',
       error TEXT,
       created_at TEXT DEFAULT (datetime('now'))
@@ -66,6 +67,7 @@ export interface Call {
   follow_ups: string | null
   sentiment: string | null
   key_points: string | null
+  whatsapp_msg: string | null
   status: CallStatus
   error: string | null
   created_at: string
@@ -73,7 +75,7 @@ export interface Call {
 
 // --- Calls ---
 
-export function upsertCall(call: Omit<Call, 'created_at' | 'transcript' | 'summary' | 'closer_briefing' | 'follow_ups' | 'sentiment' | 'key_points' | 'error'>): void {
+export function upsertCall(call: Omit<Call, 'created_at' | 'transcript' | 'summary' | 'closer_briefing' | 'follow_ups' | 'sentiment' | 'key_points' | 'whatsapp_msg' | 'error'>): void {
   const db = getDb()
   db.prepare(`
     INSERT INTO calls (id, call_id, caller, called, direction, started_at, ended_at, duration, record_url, status)
@@ -93,10 +95,13 @@ export function updateCallAnalysis(id: string, data: {
   follow_ups?: string
   sentiment?: string
   key_points?: string
+  whatsapp_msg?: string
   status: CallStatus
   error?: string
 }): void {
   const db = getDb()
+  // Add whatsapp_msg column if it doesn't exist yet (migration)
+  try { db.exec(`ALTER TABLE calls ADD COLUMN whatsapp_msg TEXT`) } catch {}
   db.prepare(`
     UPDATE calls SET
       transcript = COALESCE(?, transcript),
@@ -105,11 +110,13 @@ export function updateCallAnalysis(id: string, data: {
       follow_ups = COALESCE(?, follow_ups),
       sentiment = COALESCE(?, sentiment),
       key_points = COALESCE(?, key_points),
+      whatsapp_msg = COALESCE(?, whatsapp_msg),
       status = ?, error = ?
     WHERE id = ?
   `).run(
     data.transcript ?? null, data.summary ?? null, data.closer_briefing ?? null,
     data.follow_ups ?? null, data.sentiment ?? null, data.key_points ?? null,
+    data.whatsapp_msg ?? null,
     data.status, data.error ?? null, id
   )
 }

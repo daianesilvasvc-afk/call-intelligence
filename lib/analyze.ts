@@ -10,6 +10,7 @@ export interface CallAnalysis {
   follow_ups: string[]
   sentiment: 'positivo' | 'neutro' | 'negativo'
   key_points: string[]
+  whatsapp_msg: string
 }
 
 export async function analyzeCall(
@@ -32,22 +33,29 @@ ${transcript}
 
 JSON esperado:
 {
-  "summary": "Resumo em 2-4 frases do que aconteceu na ligação",
-  "closer_briefing": "Parágrafo inicial com perfil completo do lead (nome, cargo, contexto identificado).\\n\\n💼 Estrutura Atual da Barbearia:\\n[descreva o que foi identificado sobre a estrutura atual do negócio do lead — número de cadeiras, profissionais, modelo de atendimento, ferramentas usadas hoje, etc.]\\n\\n💡 Desempenho Atual e Indicadores:\\n[descreva o que o lead compartilhou sobre resultados atuais — faturamento mencionado, ticket médio, volume de clientes, principais desafios operacionais ou financeiros]\\n\\n🎯 Objetivo com a Reunião:\\n[qual é a expectativa do lead para a videochamada? O que ele quer resolver ou entender? Qual promessa ou dor motivou o agendamento?]\\n\\n❗ Ponto de Atenção:\\n[principais objeções, resistências, pontos sensíveis ou riscos identificados na ligação que o closer deve estar preparado para contornar]\\n\\n✅ Oportunidade para o Closer:\\n[qual é o principal gancho de vendas? Qual dor ou desejo foi mais forte? Como o closer deve abrir a reunião para criar conexão imediata com esse lead?]",
+  "summary": "Resumo em 2-4 frases do que aconteceu na ligação, destacando o perfil do lead, principal dor relatada e resultado do agendamento.",
+
+  "closer_briefing": "Parágrafo inicial com perfil completo do lead (nome, cargo, contexto identificado).\\n\\n💼 Estrutura Atual da Barbearia:\\n[descreva o que foi identificado sobre a estrutura atual do negócio do lead — número de cadeiras, profissionais, modelo de atendimento, ferramentas usadas hoje, etc.]\\n\\n💰 Momento Financeiro:\\n[faturamento mencionado ou estimado, ticket médio, volume de clientes, se está crescendo ou estagnado, principais perdas financeiras identificadas — ex: falta de recorrência, dependência do dono, baixo ticket, inadimplência, etc.]\\n\\n😣 Dores Principais (NEPQ):\\n[liste as dores emocionais e práticas verbalizadas pelo lead — use as próprias palavras dele sempre que possível. Inclua dores de problema (o que incomoda hoje), dores de implicação (consequências que ele já percebe) e dores de solução (o que ele quer alcançar). Priorize as mais fortes.]\\n\\n🎯 Objetivo com a Reunião:\\n[qual é a expectativa do lead para a videochamada? O que ele quer resolver ou entender? Qual promessa ou dor motivou o agendamento?]\\n\\n❗ Ponto de Atenção:\\n[principais objeções, resistências, pontos sensíveis ou riscos identificados na ligação que o closer deve estar preparado para contornar]\\n\\n✅ Oportunidade para o Closer:\\n[qual é o principal gancho de vendas? Qual dor ou desejo foi mais forte? Como o closer deve abrir a reunião para criar conexão imediata com esse lead?]",
+
+  "whatsapp_msg": "Oi [primeiro nome do lead]! Confirmado aqui 👇\\n📅 [dia da semana], [data por extenso] às [horário]\\n👤 Você vai conversar com o [Nome do Especialista]\\n🔗 [link Google Meet]\\n\\nO [Nome do Especialista] é especialista em estruturação de barbearias — ele já ajudou donos exatamente no cenário que você me descreveu a criar previsibilidade e sair da dependência total da própria presença.\\n\\nEle vai chegar preparado pra falar especificamente sobre [insira aqui a dor principal do lead extraída da ligação, de forma direta e pessoal] — não é uma apresentação, é uma conversa sobre o seu negócio.\\n\\nQualquer coisa antes, me chama aqui. Ele vai estar te esperando! 🤝",
+
   "follow_ups": ["ação de follow-up 1", "ação de follow-up 2", "ação de follow-up 3"],
   "sentiment": "positivo",
   "key_points": ["ponto-chave 1", "ponto-chave 2", "ponto-chave 3"]
 }
 
-IMPORTANTE: O campo "sentiment" deve ser exatamente uma dessas palavras: positivo, neutro ou negativo.
-Substitua os textos entre colchetes [ ] pelo conteúdo real extraído da transcrição.
-Se alguma informação não foi mencionada na ligação, escreva "Não mencionado na ligação".`
+REGRAS IMPORTANTES:
+- "sentiment" deve ser exatamente: positivo, neutro ou negativo.
+- No campo "whatsapp_msg": substitua APENAS [primeiro nome do lead], [dia da semana], [data por extenso], [horário] e [dor principal do lead] com o que foi extraído da transcrição. Mantenha [Nome do Especialista] e [link Google Meet] como estão (serão preenchidos manualmente).
+- Se data/horário do agendamento não foi mencionado na ligação, deixe como [data e horário a confirmar].
+- Se alguma informação do briefing não foi mencionada, escreva "Não mencionado na ligação".
+- Use as próprias palavras do lead nas dores — não generalize.`
 
   const response = await getGroq().chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.3,
-    max_tokens: 2048,
+    max_tokens: 2500,
   })
 
   const text = response.choices[0]?.message?.content?.trim() ?? ''
