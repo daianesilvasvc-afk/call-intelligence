@@ -41,10 +41,27 @@ export async function fetchCalls(apiToken: string, page = 1, pageSize = 50): Pro
   return json.data ?? []
 }
 
-export async function fetchAllCalls(apiToken: string, maxPages = 5): Promise<Api4ComCall[]> {
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+export async function fetchAllCalls(apiToken: string, maxPages = 20): Promise<Api4ComCall[]> {
   const all: Api4ComCall[] = []
   for (let page = 1; page <= maxPages; page++) {
-    const batch = await fetchCalls(apiToken, page, 50)
+    // Respect API4COM rate limit — wait 800ms between requests
+    if (page > 1) await sleep(800)
+
+    let batch: Api4ComCall[]
+    try {
+      batch = await fetchCalls(apiToken, page, 50)
+    } catch (err) {
+      // On 429, wait 5s and retry once
+      if (err instanceof Error && err.message.includes('429')) {
+        await sleep(5000)
+        batch = await fetchCalls(apiToken, page, 50)
+      } else {
+        throw err
+      }
+    }
+
     all.push(...batch)
     if (batch.length < 50) break // last page
   }
