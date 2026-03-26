@@ -24,12 +24,31 @@ interface Api4ComResponse {
   page?: number
 }
 
-export async function fetchCalls(apiToken: string, page = 1, pageSize = 50): Promise<Api4ComCall[]> {
+export interface FetchOptions {
+  startDate?: string  // YYYY-MM-DD
+  endDate?: string    // YYYY-MM-DD
+}
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+export async function fetchCalls(
+  apiToken: string,
+  page = 1,
+  pageSize = 50,
+  opts: FetchOptions = {}
+): Promise<Api4ComCall[]> {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  })
+
+  // API4COM supports startDate/endDate filters — reduces pages needed and avoids rate limits
+  if (opts.startDate) params.set('startDate', opts.startDate)
+  if (opts.endDate)   params.set('endDate',   opts.endDate)
+
   const res = await fetch(
-    `https://api.api4com.com/api/v1/calls?page=${page}&pageSize=${pageSize}`,
-    {
-      headers: { Authorization: apiToken },
-    }
+    `https://api.api4com.com/api/v1/calls?${params}`,
+    { headers: { Authorization: apiToken } }
   )
 
   if (!res.ok) {
@@ -41,29 +60,32 @@ export async function fetchCalls(apiToken: string, page = 1, pageSize = 50): Pro
   return json.data ?? []
 }
 
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
-
-export async function fetchAllCalls(apiToken: string, maxPages = 20): Promise<Api4ComCall[]> {
+export async function fetchAllCalls(
+  apiToken: string,
+  maxPages = 20,
+  opts: FetchOptions = {}
+): Promise<Api4ComCall[]> {
   const all: Api4ComCall[] = []
+
   for (let page = 1; page <= maxPages; page++) {
-    // Respect API4COM rate limit — wait 800ms between requests
-    if (page > 1) await sleep(800)
+    if (page > 1) await sleep(800) // respect rate limit
 
     let batch: Api4ComCall[]
     try {
-      batch = await fetchCalls(apiToken, page, 50)
+      batch = await fetchCalls(apiToken, page, 50, opts)
     } catch (err) {
-      // On 429, wait 5s and retry once
+      // On 429 wait 5s and retry once
       if (err instanceof Error && err.message.includes('429')) {
         await sleep(5000)
-        batch = await fetchCalls(apiToken, page, 50)
+        batch = await fetchCalls(apiToken, page, 50, opts)
       } else {
         throw err
       }
     }
 
     all.push(...batch)
-    if (batch.length < 50) break // last page
+    if (batch.length < 50) break // reached last page
   }
+
   return all
 }

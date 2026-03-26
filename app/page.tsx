@@ -420,6 +420,9 @@ function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<string | null>(null)
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const [syncStart, setSyncStart] = useState(todayStr)
+  const [syncEnd, setSyncEnd] = useState(todayStr)
   const [showSettings, setShowSettings] = useState(false)
   const [selectedCall, setSelectedCall] = useState<Call | null>(null)
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set())
@@ -471,14 +474,18 @@ function Dashboard() {
     setSyncing(true)
     setSyncResult(null)
     try {
-      const res = await fetch('/api/sync', { method: 'POST' })
+      const res = await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startDate: syncStart, endDate: syncEnd }),
+      })
       const json = await res.json()
       if (json.error) {
         setSyncResult(`Erro: ${json.error}`)
       } else {
-        const parts = [`✓ ${json.imported} novas ligações importadas`]
+        const parts = [`✓ ${json.imported} novas importadas`]
         if (json.skipped > 0) parts.push(`${json.skipped} já existentes`)
-        if (json.notSdr > 0) parts.push(`${json.notSdr} de outros usuários ignoradas`)
+        if (json.notSdr > 0) parts.push(`${json.notSdr} ignoradas`)
         setSyncResult(parts.join(' · '))
         fetchData()
       }
@@ -616,15 +623,31 @@ function Dashboard() {
 
         {/* Sync bar */}
         {isConfigured && (
-          <div className="flex items-center gap-3 mb-6">
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors flex items-center gap-2"
-            >
-              {syncing ? '⏳ Sincronizando...' : '↻ Sincronizar ligações da API4COM'}
-            </button>
-            {syncResult && <p className="text-sm text-gray-400">{syncResult}</p>}
+          <div className="flex flex-col gap-2 mb-6">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-500 font-medium">Período:</span>
+              <input
+                type="date"
+                value={syncStart}
+                onChange={e => setSyncStart(e.target.value)}
+                className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]"
+              />
+              <span className="text-xs text-gray-500">até</span>
+              <input
+                type="date"
+                value={syncEnd}
+                onChange={e => setSyncEnd(e.target.value)}
+                className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]"
+              />
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors flex items-center gap-2"
+              >
+                {syncing ? '⏳ Sincronizando...' : '↻ Sincronizar da API4COM'}
+              </button>
+            </div>
+            {syncResult && <p className="text-sm text-gray-400 pl-1">{syncResult}</p>}
           </div>
         )}
 

@@ -1,17 +1,37 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { getSetting, upsertCall, getCallByCallId } from '@/lib/db'
 import { fetchAllCalls } from '@/lib/api4com'
 import { isSdr, getSdrName } from '@/lib/sdrs'
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   const token = getSetting('api4com_token')
   if (!token) {
     return NextResponse.json({ error: 'API4COM token não configurado' }, { status: 400 })
   }
 
+  // Accept optional date range from body — defaults to today → 30 days ahead
+  let startDate: string | undefined
+  let endDate: string | undefined
   try {
-    const calls = await fetchAllCalls(token, 20)
+    const body = await req.json().catch(() => ({}))
+    startDate = body.startDate
+    endDate   = body.endDate
+  } catch { /* no body */ }
+
+  // Default: today → 30 days in the future (catches all calls scheduled or recent)
+  if (!startDate) {
+    const today = new Date()
+    startDate = today.toISOString().slice(0, 10)
+  }
+  if (!endDate) {
+    const future = new Date()
+    future.setDate(future.getDate() + 30)
+    endDate = future.toISOString().slice(0, 10)
+  }
+
+  try {
+    const calls = await fetchAllCalls(token, 20, { startDate, endDate })
 
     let imported = 0
     let skipped = 0
@@ -31,7 +51,6 @@ export async function POST() {
       const existing = getCallByCallId(c.id)
       if (existing) { skipped++; continue }
 
-      // Use official SDR name (from our list) rather than whatever the API returns
       const apiName = [c.first_name, c.last_name].filter(Boolean).join(' ') || c.email
       const sdrName = getSdrName(sdrIdentifier) ?? apiName
 
@@ -50,7 +69,10 @@ export async function POST() {
       imported++
     }
 
-    return NextResponse.json({ ok: true, imported, skipped, notSdr, total: calls.length })
+    return NextResponse.json({
+      ok: true, imported, skipped, notSdr,
+      total: calls.length, startDate, endDate,
+    })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return NextResponse.json({ error: msg }, { status: 500 })
