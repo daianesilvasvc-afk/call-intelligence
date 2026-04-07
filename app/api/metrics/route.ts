@@ -16,7 +16,8 @@ export async function GET(req: NextRequest) {
 
   try {
     // Fetch ALL calls (no duration/recording filter) for accurate HitRate
-    const calls = await fetchAllCalls(token, 20, { startDate, endDate })
+    // Max 10 pages (500 calls) with slower pace to avoid 429
+    const calls = await fetchAllCalls(token, 10, { startDate, endDate }, 1200)
 
     // Group by SDR + date
     type Row = {

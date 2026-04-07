@@ -63,28 +63,34 @@ export async function fetchCalls(
 export async function fetchAllCalls(
   apiToken: string,
   maxPages = 20,
-  opts: FetchOptions = {}
+  opts: FetchOptions = {},
+  delayMs = 800
 ): Promise<Api4ComCall[]> {
   const all: Api4ComCall[] = []
 
   for (let page = 1; page <= maxPages; page++) {
-    if (page > 1) await sleep(800) // respect rate limit
+    if (page > 1) await sleep(delayMs)
 
     let batch: Api4ComCall[]
     try {
       batch = await fetchCalls(apiToken, page, 50, opts)
     } catch (err) {
-      // On 429 wait 5s and retry once
       if (err instanceof Error && err.message.includes('429')) {
+        // Exponential backoff: 5s, then 10s
         await sleep(5000)
-        batch = await fetchCalls(apiToken, page, 50, opts)
+        try {
+          batch = await fetchCalls(apiToken, page, 50, opts)
+        } catch {
+          await sleep(10000)
+          batch = await fetchCalls(apiToken, page, 50, opts)
+        }
       } else {
         throw err
       }
     }
 
     all.push(...batch)
-    if (batch.length < 50) break // reached last page
+    if (batch.length < 50) break
   }
 
   return all
