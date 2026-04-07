@@ -8,6 +8,12 @@ import { SDRS } from '@/lib/sdrs'
 interface Stats { total: number; today: number; done: number; processing: number }
 interface ApiResponse { calls: Call[]; stats: Stats }
 interface Settings { api4com_token: string | null; groq_api_key: string | null }
+interface MetricRow {
+  sdr: string; date: string
+  total: number; connected: number; over50s: number; over3min: number
+  hitrate: number; hitrate50: number; hitrate3min: number
+  tma: number; totalDuration: number; numDiscado: number
+}
 
 function formatDuration(s: number) {
   return `${Math.floor(s / 60)}m ${s % 60}s`
@@ -400,6 +406,98 @@ function CallRow({ call, onAnalyze, onView }: {
   )
 }
 
+// ─── Metrics View ────────────────────────────────────────────────────────────
+function fmtSec(s: number) {
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  if (h > 0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+}
+
+function HitBadge({ value }: { value: number }) {
+  const cls = value >= 30 ? 'bg-emerald-500/20 text-emerald-400' : value >= 15 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'
+  return <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cls}`}>{value.toFixed(1)}%</span>
+}
+
+function MetricsView({ rows, loading, startDate, endDate, onStartChange, onEndChange, onFetch }: {
+  rows: MetricRow[] | null
+  loading: boolean
+  startDate: string
+  endDate: string
+  onStartChange: (v: string) => void
+  onEndChange: (v: string) => void
+  onFetch: () => void
+}) {
+  return (
+    <div>
+      {/* Controls */}
+      <div className="flex items-center gap-2 flex-wrap mb-6">
+        <span className="text-xs text-gray-500 font-medium">Período:</span>
+        <input type="date" value={startDate} onChange={e => onStartChange(e.target.value)}
+          className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]" />
+        <span className="text-xs text-gray-500">até</span>
+        <input type="date" value={endDate} onChange={e => onEndChange(e.target.value)}
+          className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]" />
+        <button onClick={onFetch} disabled={loading}
+          className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors">
+          {loading ? '⏳ Carregando...' : '↻ Carregar métricas'}
+        </button>
+      </div>
+
+      {!rows && !loading && (
+        <p className="text-center text-gray-500 py-20">Selecione o período e clique em "Carregar métricas"</p>
+      )}
+      {loading && <p className="text-center text-gray-500 py-20">Buscando ligações da API4COM...</p>}
+
+      {rows && rows.length === 0 && (
+        <p className="text-center text-gray-500 py-20">Nenhuma ligação encontrada no período</p>
+      )}
+
+      {rows && rows.length > 0 && (
+        <div className="overflow-x-auto rounded-xl border border-gray-800">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-800 bg-gray-900/60">
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Data</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">SDR</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Total</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Atend. &gt;50s</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Atend. &gt;3min</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">HitRate</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">HR &gt;50s</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">HR &gt;3min</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">TMA</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">T. Total</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">N. Discado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-900/40 transition-colors">
+                  <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
+                    {new Date(r.date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                  </td>
+                  <td className="px-4 py-3 text-white font-medium">{r.sdr}</td>
+                  <td className="px-4 py-3 text-right text-white font-bold">{r.total}</td>
+                  <td className="px-4 py-3 text-right text-gray-300">{r.over50s}</td>
+                  <td className="px-4 py-3 text-right text-gray-300">{r.over3min}</td>
+                  <td className="px-4 py-3 text-center"><HitBadge value={r.hitrate} /></td>
+                  <td className="px-4 py-3 text-center"><HitBadge value={r.hitrate50} /></td>
+                  <td className="px-4 py-3 text-center"><HitBadge value={r.hitrate3min} /></td>
+                  <td className="px-4 py-3 text-right text-gray-300 font-mono">{fmtSec(r.tma)}</td>
+                  <td className="px-4 py-3 text-right text-gray-300 font-mono">{fmtSec(r.totalDuration)}</td>
+                  <td className="px-4 py-3 text-right text-gray-300">{r.numDiscado}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 export default function Page() {
   return (
@@ -423,9 +521,14 @@ function Dashboard() {
   const todayStr = new Date().toISOString().slice(0, 10)
   const [syncStart, setSyncStart] = useState(todayStr)
   const [syncEnd, setSyncEnd] = useState(todayStr)
+  const [activeTab, setActiveTab] = useState<'calls' | 'metrics'>('calls')
   const [showSettings, setShowSettings] = useState(false)
   const [selectedCall, setSelectedCall] = useState<Call | null>(null)
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set())
+  const [metrics, setMetrics] = useState<MetricRow[] | null>(null)
+  const [metricsLoading, setMetricsLoading] = useState(false)
+  const [metricsStart, setMetricsStart] = useState(todayStr)
+  const [metricsEnd, setMetricsEnd] = useState(todayStr)
 
   const fetchData = useCallback(async () => {
     try {
@@ -496,6 +599,17 @@ function Dashboard() {
     }
   }
 
+  async function fetchMetrics() {
+    setMetricsLoading(true)
+    try {
+      const res = await fetch(`/api/metrics?startDate=${metricsStart}&endDate=${metricsEnd}`)
+      const json = await res.json()
+      if (json.rows) setMetrics(json.rows)
+    } finally {
+      setMetricsLoading(false)
+    }
+  }
+
   async function handleAnalyze(id: string) {
     setAnalyzingIds(prev => new Set(prev).add(id))
     try {
@@ -542,6 +656,36 @@ function Dashboard() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-8">
+        {/* Tab switcher */}
+        <div className="flex gap-1 mb-6 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit">
+          <button
+            onClick={() => setActiveTab('calls')}
+            className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors ${activeTab === 'calls' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+          >
+            Ligações
+          </button>
+          <button
+            onClick={() => setActiveTab('metrics')}
+            className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors ${activeTab === 'metrics' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+          >
+            Métricas
+          </button>
+        </div>
+
+        {/* Metrics tab */}
+        {activeTab === 'metrics' && (
+          <MetricsView
+            rows={metrics}
+            loading={metricsLoading}
+            startDate={metricsStart}
+            endDate={metricsEnd}
+            onStartChange={setMetricsStart}
+            onEndChange={setMetricsEnd}
+            onFetch={fetchMetrics}
+          />
+        )}
+
+        {activeTab === 'calls' && <>
         {/* Filters */}
         <div className="flex flex-col gap-3 mb-6">
           {/* SDR filter */}
@@ -674,6 +818,7 @@ function Dashboard() {
             ))}
           </div>
         )}
+        </>}
       </main>
 
       {showSettings && (
