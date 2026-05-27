@@ -4,15 +4,14 @@ export interface SDR {
 }
 
 export const SDRS: SDR[] = [
-  { name: 'Edrius Vieira',           email: 'edrius.podiumedu@gmail.com' },
-  { name: 'Fernanda Piemonte',       email: 'fernanda.podiumeducacao@gmail.com' },
-  { name: 'João Madeira',            email: 'joao.podiumeducacao@gmail.com' },
-  { name: 'Kauai Moro',              email: 'kauairmoro@gmail.com' },
-  { name: 'Kevin Amaro de Sousa',    email: 'keevin.amaro@gmail.com' },
   { name: 'Nátali Helena',           email: 'natalihelenapodium@gmail.com' },
-  { name: 'Thiago Palivoda',         email: 'palivodalocalizar@gmail.com' },
+  { name: 'Fernanda Piemonte',       email: 'fernanda.podiumeducacao@gmail.com' },
+  { name: 'Kevin Amaro de Sousa',    email: 'keevin.amaro@gmail.com' },
   { name: 'Samuel',                  email: 'samuel.podiumeducacao@gmail.com' },
-  { name: 'Lais',                    email: 'laispodiumeducacao@gmail.com' },
+  { name: 'Matheos',                 email: 'matheos.podiumeducacao@gmail.com' },
+  { name: 'Amanda',                  email: 'amanda.podiumeducacao@gmail.com' },
+  { name: 'Maicon',                  email: 'maiconoliveira.podiumeducacao@gmail.com' },
+  { name: 'Edrius Vieira',           email: 'edrius.podiumedu@gmail.com' },
 ]
 
 // Match both full email (edrius.podiumedu@gmail.com) and username (edrius.podiumedu)
