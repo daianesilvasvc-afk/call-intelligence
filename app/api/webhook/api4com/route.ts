@@ -32,6 +32,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true, skipped: 'not_hangup' })
     }
 
+    if (body.duration < 180) {
+      return NextResponse.json({ received: true, skipped: 'too_short' })
+    }
+
     const id = randomUUID()
 
     await upsertCall({
