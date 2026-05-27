@@ -1,4 +1,4 @@
-import { createClient, type Client, type InValue } from '@libsql/client/web'
+import { createClient, type Client, type InValue } from '@libsql/client'
 
 let _client: Client | null = null
 let _initPromise: Promise<void> | null = null
