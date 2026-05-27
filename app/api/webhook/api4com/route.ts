@@ -28,10 +28,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true, skipped: 'no_recording' })
     }
 
-    if (body.eventType && body.eventType !== 'channel-hangup') {
-      return NextResponse.json({ received: true, skipped: 'not_hangup' })
-    }
-
     if (body.duration < 180) {
       return NextResponse.json({ received: true, skipped: 'too_short' })
     }
