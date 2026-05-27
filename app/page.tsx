@@ -19,7 +19,7 @@ function formatDuration(s: number) {
   return `${Math.floor(s / 60)}m ${s % 60}s`
 }
 function formatDate(d: string) {
-  return new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
 }
 
 function SentimentBadge({ sentiment }: { sentiment: string | null }) {
