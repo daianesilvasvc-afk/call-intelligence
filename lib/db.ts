@@ -1,53 +1,104 @@
-import { createClient, type Client, type InValue } from '@libsql/client'
+// Direct Turso HTTP API — no SDK, no native binaries, works on any serverless platform
 
-let _client: Client | null = null
+function dbUrl() {
+  return (process.env.TURSO_DATABASE_URL ?? '').replace('libsql://', 'https://')
+}
+
+type SqlVal =
+  | { type: 'null' }
+  | { type: 'integer'; value: string }
+  | { type: 'real'; value: string }
+  | { type: 'text'; value: string }
+
+function toSql(v: unknown): SqlVal {
+  if (v === null || v === undefined) return { type: 'null' }
+  if (typeof v === 'boolean') return { type: 'integer', value: v ? '1' : '0' }
+  if (typeof v === 'bigint') return { type: 'integer', value: String(v) }
+  if (typeof v === 'number') {
+    return Number.isInteger(v)
+      ? { type: 'integer', value: String(v) }
+      : { type: 'real', value: String(v) }
+  }
+  return { type: 'text', value: String(v) }
+}
+
+function fromSql(v: SqlVal): unknown {
+  if (v.type === 'null') return null
+  if (v.type === 'integer') return parseInt(v.value, 10)
+  if (v.type === 'real') return parseFloat(v.value)
+  return v.value
+}
+
+async function execute(sql: string, args: unknown[] = []): Promise<{ rows: Record<string, unknown>[]; rowsAffected: number }> {
+  const res = await fetch(`${dbUrl()}/v2/pipeline`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.TURSO_AUTH_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      requests: [
+        { type: 'execute', stmt: { sql, args: args.map(toSql) } },
+        { type: 'close' },
+      ],
+    }),
+  })
+
+  if (!res.ok) throw new Error(`Turso ${res.status}: ${(await res.text()).slice(0, 200)}`)
+
+  const data = await res.json() as { results: Array<{ type: string; response?: { result?: { cols: { name: string }[]; rows: SqlVal[][]; affected_row_count: number } }; error?: { message: string } }> }
+  const r = data.results[0]
+  if (r.type === 'error') throw new Error(`Turso: ${r.error?.message}`)
+
+  const result = r.response!.result!
+  const cols = result.cols.map(c => c.name)
+  const rows = result.rows.map(row => {
+    const obj: Record<string, unknown> = {}
+    row.forEach((val, i) => { obj[cols[i]] = fromSql(val) })
+    return obj
+  })
+  return { rows, rowsAffected: result.affected_row_count }
+}
+
+async function executeBatch(statements: { sql: string; args?: unknown[] }[]): Promise<void> {
+  const res = await fetch(`${dbUrl()}/v2/pipeline`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.TURSO_AUTH_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      requests: [
+        ...statements.map(s => ({ type: 'execute', stmt: { sql: s.sql, args: (s.args ?? []).map(toSql) } })),
+        { type: 'close' },
+      ],
+    }),
+  })
+  if (!res.ok) throw new Error(`Turso batch ${res.status}: ${(await res.text()).slice(0, 200)}`)
+}
+
 let _initPromise: Promise<void> | null = null
 
-function getClient(): Client {
-  if (!_client) {
-    _client = createClient({
-      url: process.env.TURSO_DATABASE_URL!,
-      authToken: process.env.TURSO_AUTH_TOKEN,
-    })
-  }
-  return _client
-}
-
-async function getDb(): Promise<Client> {
-  const client = getClient()
+function ensureSchema(): Promise<void> {
   if (!_initPromise) {
-    _initPromise = client.batch([
-      `CREATE TABLE IF NOT EXISTS calls (
-          id TEXT PRIMARY KEY,
-          call_id TEXT UNIQUE,
-          caller TEXT,
-          called TEXT,
-          direction TEXT,
-          started_at TEXT,
-          ended_at TEXT,
-          duration INTEGER,
-          record_url TEXT,
-          transcript TEXT,
-          summary TEXT,
-          closer_briefing TEXT,
-          follow_ups TEXT,
-          sentiment TEXT,
-          key_points TEXT,
-          whatsapp_msg TEXT,
-          qualification TEXT,
-          status TEXT DEFAULT 'pending',
-          error TEXT,
+    _initPromise = executeBatch([
+      {
+        sql: `CREATE TABLE IF NOT EXISTS calls (
+          id TEXT PRIMARY KEY, call_id TEXT UNIQUE, caller TEXT, called TEXT,
+          direction TEXT, started_at TEXT, ended_at TEXT, duration INTEGER,
+          record_url TEXT, transcript TEXT, summary TEXT, closer_briefing TEXT,
+          follow_ups TEXT, sentiment TEXT, key_points TEXT, whatsapp_msg TEXT,
+          qualification TEXT, status TEXT DEFAULT 'pending', error TEXT,
           created_at TEXT DEFAULT (datetime('now'))
         )`,
-      `CREATE TABLE IF NOT EXISTS settings (
-          key TEXT PRIMARY KEY,
-          value TEXT
-        )`,
-    ], 'write').then(() => {})
+      },
+      { sql: `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)` },
+    ])
   }
-  await _initPromise
-  return client
+  return _initPromise
 }
+
+// --- Types ---
 
 export type CallStatus = 'pending' | 'processing' | 'done' | 'error'
 
@@ -79,110 +130,76 @@ export interface Call {
 export async function upsertCall(
   call: Omit<Call, 'created_at' | 'transcript' | 'summary' | 'closer_briefing' | 'follow_ups' | 'sentiment' | 'key_points' | 'whatsapp_msg' | 'qualification' | 'error'>
 ): Promise<void> {
-  const db = await getDb()
-  await db.execute({
-    sql: `INSERT INTO calls (id, call_id, caller, called, direction, started_at, ended_at, duration, record_url, status)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(call_id) DO UPDATE SET
-            caller=excluded.caller, called=excluded.called, direction=excluded.direction,
-            started_at=excluded.started_at, ended_at=excluded.ended_at,
-            duration=excluded.duration, record_url=excluded.record_url`,
-    args: [call.id, call.call_id, call.caller, call.called, call.direction,
-           call.started_at, call.ended_at, call.duration, call.record_url, call.status],
-  })
+  await ensureSchema()
+  await execute(
+    `INSERT INTO calls (id, call_id, caller, called, direction, started_at, ended_at, duration, record_url, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(call_id) DO UPDATE SET
+       caller=excluded.caller, called=excluded.called, direction=excluded.direction,
+       started_at=excluded.started_at, ended_at=excluded.ended_at,
+       duration=excluded.duration, record_url=excluded.record_url`,
+    [call.id, call.call_id, call.caller, call.called, call.direction,
+     call.started_at, call.ended_at, call.duration, call.record_url, call.status]
+  )
 }
 
 export async function updateCallAnalysis(id: string, data: {
-  transcript?: string
-  summary?: string
-  closer_briefing?: string
-  follow_ups?: string
-  sentiment?: string
-  key_points?: string
-  whatsapp_msg?: string
-  qualification?: string
-  status: CallStatus
-  error?: string
+  transcript?: string; summary?: string; closer_briefing?: string; follow_ups?: string
+  sentiment?: string; key_points?: string; whatsapp_msg?: string; qualification?: string
+  status: CallStatus; error?: string
 }): Promise<void> {
-  const db = await getDb()
-  await db.execute({
-    sql: `UPDATE calls SET
-            transcript = COALESCE(?, transcript),
-            summary = COALESCE(?, summary),
-            closer_briefing = COALESCE(?, closer_briefing),
-            follow_ups = COALESCE(?, follow_ups),
-            sentiment = COALESCE(?, sentiment),
-            key_points = COALESCE(?, key_points),
-            whatsapp_msg = COALESCE(?, whatsapp_msg),
-            qualification = COALESCE(?, qualification),
-            status = ?, error = ?
-          WHERE id = ?`,
-    args: [
-      data.transcript ?? null, data.summary ?? null, data.closer_briefing ?? null,
-      data.follow_ups ?? null, data.sentiment ?? null, data.key_points ?? null,
-      data.whatsapp_msg ?? null, data.qualification ?? null,
-      data.status, data.error ?? null, id,
-    ],
-  })
+  await ensureSchema()
+  await execute(
+    `UPDATE calls SET
+       transcript = COALESCE(?, transcript), summary = COALESCE(?, summary),
+       closer_briefing = COALESCE(?, closer_briefing), follow_ups = COALESCE(?, follow_ups),
+       sentiment = COALESCE(?, sentiment), key_points = COALESCE(?, key_points),
+       whatsapp_msg = COALESCE(?, whatsapp_msg), qualification = COALESCE(?, qualification),
+       status = ?, error = ?
+     WHERE id = ?`,
+    [data.transcript ?? null, data.summary ?? null, data.closer_briefing ?? null,
+     data.follow_ups ?? null, data.sentiment ?? null, data.key_points ?? null,
+     data.whatsapp_msg ?? null, data.qualification ?? null,
+     data.status, data.error ?? null, id]
+  )
 }
 
 export async function getCalls(limit = 100, offset = 0, sdr?: string, date?: string): Promise<Call[]> {
-  const db = await getDb()
+  await ensureSchema()
   const conditions: string[] = []
-  const args: InValue[] = []
-
-  if (sdr) {
-    conditions.push('(caller = ? OR called = ?)')
-    args.push(sdr, sdr)
-  }
-  if (date) {
-    conditions.push('date(started_at) = ?')
-    args.push(date)
-  }
-
+  const args: unknown[] = []
+  if (sdr) { conditions.push('(caller = ? OR called = ?)'); args.push(sdr, sdr) }
+  if (date) { conditions.push('date(started_at) = ?'); args.push(date) }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
   args.push(limit, offset)
-
-  const result = await db.execute({
-    sql: `SELECT * FROM calls ${where} ORDER BY started_at DESC LIMIT ? OFFSET ?`,
-    args,
-  })
-  return result.rows as unknown as Call[]
+  const { rows } = await execute(`SELECT * FROM calls ${where} ORDER BY started_at DESC LIMIT ? OFFSET ?`, args)
+  return rows as unknown as Call[]
 }
 
 export async function getCallById(id: string): Promise<Call | null> {
-  const db = await getDb()
-  const result = await db.execute({
-    sql: 'SELECT * FROM calls WHERE id = ?',
-    args: [id],
-  })
-  return (result.rows[0] ?? null) as unknown as Call | null
+  await ensureSchema()
+  const { rows } = await execute('SELECT * FROM calls WHERE id = ?', [id])
+  return (rows[0] ?? null) as unknown as Call | null
 }
 
 export async function getCallByCallId(callId: string): Promise<Call | null> {
-  const db = await getDb()
-  const result = await db.execute({
-    sql: 'SELECT * FROM calls WHERE call_id = ?',
-    args: [callId],
-  })
-  return (result.rows[0] ?? null) as unknown as Call | null
+  await ensureSchema()
+  const { rows } = await execute('SELECT * FROM calls WHERE call_id = ?', [callId])
+  return (rows[0] ?? null) as unknown as Call | null
 }
 
 export async function getStats(sdr?: string, date?: string) {
-  const db = await getDb()
+  await ensureSchema()
 
-  async function count(extra: string, ...extraArgs: InValue[]): Promise<number> {
+  async function count(extra: string, ...extraArgs: unknown[]): Promise<number> {
     const conditions: string[] = []
-    const args: InValue[] = []
+    const args: unknown[] = []
     if (sdr) { conditions.push('(caller = ? OR called = ?)'); args.push(sdr, sdr) }
     if (date) { conditions.push('date(started_at) = ?'); args.push(date) }
     if (extra) { conditions.push(extra); args.push(...extraArgs) }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
-    const result = await db.execute({
-      sql: `SELECT COUNT(*) as c FROM calls ${where}`,
-      args,
-    })
-    return Number(result.rows[0]?.c ?? 0)
+    const { rows } = await execute(`SELECT COUNT(*) as c FROM calls ${where}`, args)
+    return Number(rows[0]?.c ?? 0)
   }
 
   const [total, today, done, processing] = await Promise.all([
@@ -191,7 +208,6 @@ export async function getStats(sdr?: string, date?: string) {
     count("status = 'done'"),
     count("status IN ('pending','processing')"),
   ])
-
   return { total, today, done, processing }
 }
 
@@ -205,19 +221,15 @@ const ENV_MAP: Record<string, string> = {
 export async function getSetting(key: string): Promise<string | null> {
   const envKey = ENV_MAP[key]
   if (envKey && process.env[envKey]) return process.env[envKey]!
-  const db = await getDb()
-  const result = await db.execute({
-    sql: 'SELECT value FROM settings WHERE key = ?',
-    args: [key],
-  })
-  return (result.rows[0]?.value as string) ?? null
+  await ensureSchema()
+  const { rows } = await execute('SELECT value FROM settings WHERE key = ?', [key])
+  return (rows[0]?.value as string) ?? null
 }
 
 export async function setSetting(key: string, value: string): Promise<void> {
-  const db = await getDb()
-  await db.execute({
-    sql: `INSERT INTO settings (key, value) VALUES (?, ?)
-          ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-    args: [key, value],
-  })
+  await ensureSchema()
+  await execute(
+    `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [key, value]
+  )
 }
