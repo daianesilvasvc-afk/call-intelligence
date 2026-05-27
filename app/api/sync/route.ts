@@ -19,12 +19,12 @@ export async function POST(req: NextRequest) {
   } catch { /* no body */ }
 
   if (!startDate) {
-    startDate = new Date().toISOString().slice(0, 10)
+    const past = new Date()
+    past.setDate(past.getDate() - 7)
+    startDate = past.toISOString().slice(0, 10)
   }
   if (!endDate) {
-    const future = new Date()
-    future.setDate(future.getDate() + 30)
-    endDate = future.toISOString().slice(0, 10)
+    endDate = new Date().toISOString().slice(0, 10)
   }
 
   try {
