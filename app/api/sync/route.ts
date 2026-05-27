@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const calls = await fetchAllCalls(token, 20, { startDate, endDate })
+    const calls = await fetchAllCalls(token, 20, { startDate, endDate }, 2000)
 
     let imported = 0
     let skipped = 0
