@@ -6,7 +6,7 @@ import { isSdr, getSdrName, SDRS } from '@/lib/sdrs'
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
-  const token = getSetting('api4com_token')
+  const token = await getSetting('api4com_token')
   if (!token) return NextResponse.json({ error: 'token not set' }, { status: 400 })
 
   const { searchParams } = new URL(req.url)
@@ -15,18 +15,15 @@ export async function GET(req: NextRequest) {
   const endDate   = searchParams.get('endDate')   || today
 
   try {
-    // Fetch ALL calls (no duration/recording filter) for accurate HitRate
-    // Max 10 pages (500 calls) with slower pace to avoid 429
     const calls = await fetchAllCalls(token, 10, { startDate, endDate }, 1200)
 
-    // Group by SDR + date
     type Row = {
       sdr: string
       date: string
       total: number
-      connected: number   // duration > 0
-      over50s: number     // duration > 50
-      over3min: number    // duration >= 180
+      connected: number
+      over50s: number
+      over3min: number
       totalDuration: number
       numbers: Set<string>
     }
@@ -47,8 +44,8 @@ export async function GET(req: NextRequest) {
 
       const row = map.get(key)!
       row.total++
-      if (c.duration > 0)   row.connected++
-      if (c.duration > 50)  row.over50s++
+      if (c.duration > 0)    row.connected++
+      if (c.duration > 50)   row.over50s++
       if (c.duration >= 180) row.over3min++
       row.totalDuration += c.duration
       if (c.to) row.numbers.add(c.to)

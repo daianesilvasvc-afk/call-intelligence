@@ -7,7 +7,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    const call = getCallById(id)
+    const call = await getCallById(id)
     if (!call) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }

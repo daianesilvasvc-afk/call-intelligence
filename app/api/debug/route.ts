@@ -4,12 +4,11 @@ import { fetchAllCalls } from '@/lib/api4com'
 import { isSdr, getSdrName } from '@/lib/sdrs'
 
 export async function GET() {
-  const token = getSetting('api4com_token')
+  const token = await getSetting('api4com_token')
   if (!token) return NextResponse.json({ error: 'token not set' }, { status: 400 })
 
   const calls = await fetchAllCalls(token, 20)
 
-  // Count by SDR email (raw from API)
   const byEmail: Record<string, { total: number; withRecording: number; over3min: number; wouldImport: number }> = {}
 
   for (const c of calls) {
@@ -22,7 +21,6 @@ export async function GET() {
     if (sdrId && c.record_url && c.duration >= 180) byEmail[key].wouldImport++
   }
 
-  // Summary for SDRs
   const sdrRows = Object.entries(byEmail)
     .filter(([email]) => isSdr(email))
     .map(([email, counts]) => ({ email, name: getSdrName(email), ...counts }))
@@ -32,7 +30,6 @@ export async function GET() {
     .filter(([email]) => !isSdr(email))
     .reduce((sum, [, c]) => sum + c.total, 0)
 
-  // Top unknown emails (to identify missing SDRs)
   const unknownEmails: Record<string, number> = {}
   for (const c of calls) {
     if (!isSdr(c.email)) {
@@ -45,7 +42,6 @@ export async function GET() {
     .slice(0, 30)
     .map(([email, count]) => ({ email, count }))
 
-  // Sample records from the main account email to find agent names
   const mainAccountSamples = calls
     .filter(c => c.email === 'victorzanellad@gmail.com')
     .slice(0, 20)

@@ -1,53 +1,52 @@
-import Database from 'better-sqlite3'
-import path from 'path'
+import { createClient, type Client, type InValue } from '@libsql/client'
 
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data')
-const DB_PATH = path.join(DATA_DIR, 'calls.db')
+let _client: Client | null = null
+let _initPromise: Promise<void> | null = null
 
-let db: Database.Database | null = null
-
-export function getDb(): Database.Database {
-  if (!db) {
-    const fs = require('fs')
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
-
-    db = new Database(DB_PATH)
-    db.pragma('journal_mode = WAL')
-    initSchema(db)
+function getClient(): Client {
+  if (!_client) {
+    _client = createClient({
+      url: process.env.TURSO_DATABASE_URL!,
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    })
   }
-  return db
+  return _client
 }
 
-function initSchema(db: Database.Database) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS calls (
-      id TEXT PRIMARY KEY,
-      call_id TEXT UNIQUE,
-      caller TEXT,
-      called TEXT,
-      direction TEXT,
-      started_at TEXT,
-      ended_at TEXT,
-      duration INTEGER,
-      record_url TEXT,
-      transcript TEXT,
-      summary TEXT,
-      closer_briefing TEXT,
-      follow_ups TEXT,
-      sentiment TEXT,
-      key_points TEXT,
-      whatsapp_msg TEXT,
-      qualification TEXT,
-      status TEXT DEFAULT 'pending',
-      error TEXT,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT
-    );
-  `)
+async function getDb(): Promise<Client> {
+  const client = getClient()
+  if (!_initPromise) {
+    _initPromise = client.batch([
+      `CREATE TABLE IF NOT EXISTS calls (
+          id TEXT PRIMARY KEY,
+          call_id TEXT UNIQUE,
+          caller TEXT,
+          called TEXT,
+          direction TEXT,
+          started_at TEXT,
+          ended_at TEXT,
+          duration INTEGER,
+          record_url TEXT,
+          transcript TEXT,
+          summary TEXT,
+          closer_briefing TEXT,
+          follow_ups TEXT,
+          sentiment TEXT,
+          key_points TEXT,
+          whatsapp_msg TEXT,
+          qualification TEXT,
+          status TEXT DEFAULT 'pending',
+          error TEXT,
+          created_at TEXT DEFAULT (datetime('now'))
+        )`,
+      `CREATE TABLE IF NOT EXISTS settings (
+          key TEXT PRIMARY KEY,
+          value TEXT
+        )`,
+    ], 'write').then(() => {})
+  }
+  await _initPromise
+  return client
 }
 
 export type CallStatus = 'pending' | 'processing' | 'done' | 'error'
@@ -77,20 +76,23 @@ export interface Call {
 
 // --- Calls ---
 
-export function upsertCall(call: Omit<Call, 'created_at' | 'transcript' | 'summary' | 'closer_briefing' | 'follow_ups' | 'sentiment' | 'key_points' | 'whatsapp_msg' | 'qualification' | 'error'>): void {
-  const db = getDb()
-  db.prepare(`
-    INSERT INTO calls (id, call_id, caller, called, direction, started_at, ended_at, duration, record_url, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(call_id) DO UPDATE SET
-      caller=excluded.caller, called=excluded.called, direction=excluded.direction,
-      started_at=excluded.started_at, ended_at=excluded.ended_at,
-      duration=excluded.duration, record_url=excluded.record_url
-  `).run(call.id, call.call_id, call.caller, call.called, call.direction,
-    call.started_at, call.ended_at, call.duration, call.record_url, call.status)
+export async function upsertCall(
+  call: Omit<Call, 'created_at' | 'transcript' | 'summary' | 'closer_briefing' | 'follow_ups' | 'sentiment' | 'key_points' | 'whatsapp_msg' | 'qualification' | 'error'>
+): Promise<void> {
+  const db = await getDb()
+  await db.execute({
+    sql: `INSERT INTO calls (id, call_id, caller, called, direction, started_at, ended_at, duration, record_url, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(call_id) DO UPDATE SET
+            caller=excluded.caller, called=excluded.called, direction=excluded.direction,
+            started_at=excluded.started_at, ended_at=excluded.ended_at,
+            duration=excluded.duration, record_url=excluded.record_url`,
+    args: [call.id, call.call_id, call.caller, call.called, call.direction,
+           call.started_at, call.ended_at, call.duration, call.record_url, call.status],
+  })
 }
 
-export function updateCallAnalysis(id: string, data: {
+export async function updateCallAnalysis(id: string, data: {
   transcript?: string
   summary?: string
   closer_briefing?: string
@@ -101,100 +103,121 @@ export function updateCallAnalysis(id: string, data: {
   qualification?: string
   status: CallStatus
   error?: string
-}): void {
-  const db = getDb()
-  // Migrations for new columns
-  try { db.exec(`ALTER TABLE calls ADD COLUMN whatsapp_msg TEXT`) } catch {}
-  try { db.exec(`ALTER TABLE calls ADD COLUMN qualification TEXT`) } catch {}
-  db.prepare(`
-    UPDATE calls SET
-      transcript = COALESCE(?, transcript),
-      summary = COALESCE(?, summary),
-      closer_briefing = COALESCE(?, closer_briefing),
-      follow_ups = COALESCE(?, follow_ups),
-      sentiment = COALESCE(?, sentiment),
-      key_points = COALESCE(?, key_points),
-      whatsapp_msg = COALESCE(?, whatsapp_msg),
-      qualification = COALESCE(?, qualification),
-      status = ?, error = ?
-    WHERE id = ?
-  `).run(
-    data.transcript ?? null, data.summary ?? null, data.closer_briefing ?? null,
-    data.follow_ups ?? null, data.sentiment ?? null, data.key_points ?? null,
-    data.whatsapp_msg ?? null, data.qualification ?? null,
-    data.status, data.error ?? null, id
-  )
+}): Promise<void> {
+  const db = await getDb()
+  await db.execute({
+    sql: `UPDATE calls SET
+            transcript = COALESCE(?, transcript),
+            summary = COALESCE(?, summary),
+            closer_briefing = COALESCE(?, closer_briefing),
+            follow_ups = COALESCE(?, follow_ups),
+            sentiment = COALESCE(?, sentiment),
+            key_points = COALESCE(?, key_points),
+            whatsapp_msg = COALESCE(?, whatsapp_msg),
+            qualification = COALESCE(?, qualification),
+            status = ?, error = ?
+          WHERE id = ?`,
+    args: [
+      data.transcript ?? null, data.summary ?? null, data.closer_briefing ?? null,
+      data.follow_ups ?? null, data.sentiment ?? null, data.key_points ?? null,
+      data.whatsapp_msg ?? null, data.qualification ?? null,
+      data.status, data.error ?? null, id,
+    ],
+  })
 }
 
-export function getCalls(limit = 100, offset = 0, sdr?: string, date?: string): Call[] {
+export async function getCalls(limit = 100, offset = 0, sdr?: string, date?: string): Promise<Call[]> {
+  const db = await getDb()
   const conditions: string[] = []
-  const params: unknown[] = []
+  const args: InValue[] = []
 
   if (sdr) {
     conditions.push('(caller = ? OR called = ?)')
-    params.push(sdr, sdr)
+    args.push(sdr, sdr)
   }
   if (date) {
-    conditions.push("date(started_at) = ?")
-    params.push(date)
+    conditions.push('date(started_at) = ?')
+    args.push(date)
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
-  params.push(limit, offset)
-  return getDb().prepare(`
-    SELECT * FROM calls ${where} ORDER BY started_at DESC LIMIT ? OFFSET ?
-  `).all(...params) as Call[]
+  args.push(limit, offset)
+
+  const result = await db.execute({
+    sql: `SELECT * FROM calls ${where} ORDER BY started_at DESC LIMIT ? OFFSET ?`,
+    args,
+  })
+  return result.rows as unknown as Call[]
 }
 
-export function getCallById(id: string): Call | null {
-  return getDb().prepare('SELECT * FROM calls WHERE id = ?').get(id) as Call | null
+export async function getCallById(id: string): Promise<Call | null> {
+  const db = await getDb()
+  const result = await db.execute({
+    sql: 'SELECT * FROM calls WHERE id = ?',
+    args: [id],
+  })
+  return (result.rows[0] ?? null) as unknown as Call | null
 }
 
-export function getCallByCallId(callId: string): Call | null {
-  return getDb().prepare('SELECT * FROM calls WHERE call_id = ?').get(callId) as Call | null
+export async function getCallByCallId(callId: string): Promise<Call | null> {
+  const db = await getDb()
+  const result = await db.execute({
+    sql: 'SELECT * FROM calls WHERE call_id = ?',
+    args: [callId],
+  })
+  return (result.rows[0] ?? null) as unknown as Call | null
 }
 
-export function getStats(sdr?: string, date?: string) {
-  const db = getDb()
+export async function getStats(sdr?: string, date?: string) {
+  const db = await getDb()
 
-  function count(extra: string, ...args: unknown[]) {
+  async function count(extra: string, ...extraArgs: InValue[]): Promise<number> {
     const conditions: string[] = []
-    const params: unknown[] = []
-    if (sdr) { conditions.push('(caller = ? OR called = ?)'); params.push(sdr, sdr) }
-    if (date) { conditions.push('date(started_at) = ?'); params.push(date) }
-    if (extra) { conditions.push(extra); params.push(...args) }
+    const args: InValue[] = []
+    if (sdr) { conditions.push('(caller = ? OR called = ?)'); args.push(sdr, sdr) }
+    if (date) { conditions.push('date(started_at) = ?'); args.push(date) }
+    if (extra) { conditions.push(extra); args.push(...extraArgs) }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
-    return (db.prepare(`SELECT COUNT(*) as c FROM calls ${where}`).get(...params) as any).c as number
+    const result = await db.execute({
+      sql: `SELECT COUNT(*) as c FROM calls ${where}`,
+      args,
+    })
+    return Number(result.rows[0]?.c ?? 0)
   }
 
-  return {
-    total:      count(''),
-    today:      count("date(started_at) = date('now')"),
-    done:       count("status = 'done'"),
-    processing: count("status IN ('pending','processing')"),
-  }
+  const [total, today, done, processing] = await Promise.all([
+    count(''),
+    count("date(started_at) = date('now')"),
+    count("status = 'done'"),
+    count("status IN ('pending','processing')"),
+  ])
+
+  return { total, today, done, processing }
 }
 
 // --- Settings ---
 
-// Env var names for each setting key (Railway/production)
 const ENV_MAP: Record<string, string> = {
   api4com_token: 'API4COM_TOKEN',
   groq_api_key: 'GROQ_API_KEY',
 }
 
-export function getSetting(key: string): string | null {
-  // Check environment variable first (Railway production)
+export async function getSetting(key: string): Promise<string | null> {
   const envKey = ENV_MAP[key]
   if (envKey && process.env[envKey]) return process.env[envKey]!
-  // Fall back to database (local dev via settings UI)
-  const row = getDb().prepare('SELECT value FROM settings WHERE key = ?').get(key) as any
-  return row?.value ?? null
+  const db = await getDb()
+  const result = await db.execute({
+    sql: 'SELECT value FROM settings WHERE key = ?',
+    args: [key],
+  })
+  return (result.rows[0]?.value as string) ?? null
 }
 
-export function setSetting(key: string, value: string): void {
-  getDb().prepare(`
-    INSERT INTO settings (key, value) VALUES (?, ?)
-    ON CONFLICT(key) DO UPDATE SET value = excluded.value
-  `).run(key, value)
+export async function setSetting(key: string, value: string): Promise<void> {
+  const db = await getDb()
+  await db.execute({
+    sql: `INSERT INTO settings (key, value) VALUES (?, ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    args: [key, value],
+  })
 }
