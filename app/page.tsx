@@ -233,29 +233,62 @@ function CallModal({ call, onClose }: { call: Call; onClose: () => void }) {
               {/* Validações rápidas */}
               <div className="flex flex-wrap gap-x-5 gap-y-2">
                 <QBool value={q.cnpj_validated} label="CNPJ validado" />
-                <QBool value={q.revenue_validated} label="Faturamento validado" />
                 <QBool value={q.team_size_validated} label="Equipe validada" />
-                {q.revenue_below_10k === true && (
-                  <QBool value={q.cash_reserve_validated} label="Caixa para investir validado" />
-                )}
               </div>
 
-              {/* Citação obrigatória do budget quando faturamento < R$10k */}
-              {q.revenue_below_10k === true && q.cash_reserve_citation && (
-                <div className="bg-gray-800/40 rounded-lg px-4 py-3">
-                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1.5">📌 Evidência — validação do budget</p>
-                  <p className="text-xs text-gray-300 italic leading-relaxed border-l-2 border-yellow-600/60 pl-3">
-                    {q.cash_reserve_citation}
-                  </p>
+              {/* Capacidade financeira para investir */}
+              <div className={`rounded-lg border p-4 space-y-3 ${
+                q.investment_capacity_validated === true
+                  ? 'border-emerald-700/50 bg-emerald-950/20'
+                  : q.investment_capacity_validated === false
+                  ? 'border-red-700/50 bg-red-950/20'
+                  : 'border-gray-700 bg-gray-800/30'
+              }`}>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">💰 Capacidade financeira para investir</span>
+                  <span className={`text-sm font-bold ${
+                    q.investment_capacity_validated === true ? 'text-emerald-400'
+                    : q.investment_capacity_validated === false ? 'text-red-400'
+                    : 'text-yellow-400'
+                  }`}>
+                    {q.investment_capacity_validated === true ? '✅ Validada' : q.investment_capacity_validated === false ? '❌ Não validada' : '⚠️ Não identificado'}
+                  </span>
                 </div>
-              )}
 
-              {/* Alerta crítico */}
-              {q.revenue_below_10k === true && q.cash_reserve_validated !== true && (
-                <div className="bg-red-950/40 border border-red-700/50 rounded-lg px-4 py-2.5 text-sm text-red-300 font-medium">
-                  ⚠️ REGRA CRÍTICA: Faturamento abaixo de R$10k — caixa para investir não validado
+                {/* Faturamento + faixa */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-sm text-white font-medium">{q.monthly_revenue || 'Não identificado'}</span>
+                  {q.revenue_bracket && q.revenue_bracket !== 'não_identificado' && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      q.revenue_bracket === 'abaixo_10k' ? 'bg-red-500/20 text-red-300'
+                      : q.revenue_bracket === '10k_30k' ? 'bg-yellow-500/20 text-yellow-300'
+                      : 'bg-emerald-500/20 text-emerald-300'
+                    }`}>
+                      {q.revenue_bracket === 'abaixo_10k' ? '< R$10k' : q.revenue_bracket === '10k_30k' ? 'R$10k–30k' : '> R$30k'}
+                    </span>
+                  )}
                 </div>
-              )}
+
+                {/* Bloco de caixa/reserva (só quando < 10k) */}
+                {q.revenue_bracket === 'abaixo_10k' && (
+                  <div className="space-y-2 pt-1 border-t border-gray-700/50">
+                    <QBool value={q.cash_reserve_validated} label="Validou se tem caixa/reserva para investir" />
+                    {q.investment_capacity_validated === false && !q.cash_reserve_citation && (
+                      <p className="text-xs text-red-400 font-medium">
+                        ⚠️ REGRA CRÍTICA: Faturamento abaixo de R$10k — SDR não validou se lead tem caixa para investir
+                      </p>
+                    )}
+                    {q.cash_reserve_citation && (
+                      <div className="bg-gray-900/60 rounded-md px-3 py-2">
+                        <p className="text-xs text-gray-500 mb-1">📌 Evidência — validação do budget</p>
+                        <p className="text-xs text-gray-300 italic leading-relaxed border-l-2 border-yellow-600/50 pl-2">
+                          {q.cash_reserve_citation}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Desqualificação */}
               {q.disqualification_reason && (
@@ -268,10 +301,6 @@ function CallModal({ call, onClose }: { call: Call; onClose: () => void }) {
               {/* Grid de dados */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="bg-gray-800/50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 mb-0.5">💰 Faturamento mensal</p>
-                  <p className="text-white text-sm font-medium">{q.monthly_revenue}</p>
-                </div>
-                <div className="bg-gray-800/50 rounded-lg p-3">
                   <p className="text-xs text-gray-500 mb-0.5">👥 Tamanho da equipe</p>
                   <p className="text-white text-sm font-medium">{q.team_size}</p>
                 </div>
@@ -282,7 +311,7 @@ function CallModal({ call, onClose }: { call: Call; onClose: () => void }) {
                     {q.meeting_note ? ` — ${q.meeting_note}` : ''}
                   </p>
                 </div>
-                <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="bg-gray-800/50 rounded-lg p-3 sm:col-span-2">
                   <p className="text-xs text-gray-500 mb-0.5">📊 Maturidade do barbeiro</p>
                   <p className="text-white text-sm font-medium">{q.maturity_level}</p>
                   {q.maturity_justification && (
