@@ -142,7 +142,7 @@ function CopyButton({ text }: { text: string }) {
 
 // ─── Call Detail Modal ───────────────────────────────────────────────────────
 // ─── Qualification Badge ──────────────────────────────────────────────────────
-function QBool({ value, label, citation }: { value: boolean | null; label: string; citation?: string | null }) {
+function QBool({ value, label }: { value: boolean | null; label: string }) {
   const icon = value === true ? '✅' : value === false ? '❌' : '⚠️'
   const cls = value === true
     ? 'text-emerald-400'
@@ -150,14 +150,7 @@ function QBool({ value, label, citation }: { value: boolean | null; label: strin
     ? 'text-red-400'
     : 'text-yellow-400'
   return (
-    <div className="space-y-1">
-      <span className={`text-sm ${cls} font-medium`}>{icon} {label}</span>
-      {citation && (
-        <p className="text-xs text-gray-500 italic pl-3 border-l-2 border-gray-700 leading-relaxed">
-          {citation}
-        </p>
-      )}
-    </div>
+    <span className={`text-sm ${cls}`}>{icon} {label}</span>
   )
 }
 
@@ -238,14 +231,24 @@ function CallModal({ call, onClose }: { call: Call; onClose: () => void }) {
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">🔍 Qualificação do Lead</h3>
 
               {/* Validações rápidas */}
-              <div className="space-y-3">
-                <QBool value={q.cnpj_validated} label="CNPJ validado" citation={q.cnpj_citation} />
-                <QBool value={q.revenue_validated} label="Faturamento validado" citation={q.revenue_citation} />
-                <QBool value={q.team_size_validated} label="Tamanho da equipe validado" citation={q.team_size_citation} />
+              <div className="flex flex-wrap gap-x-5 gap-y-2">
+                <QBool value={q.cnpj_validated} label="CNPJ validado" />
+                <QBool value={q.revenue_validated} label="Faturamento validado" />
+                <QBool value={q.team_size_validated} label="Equipe validada" />
                 {q.revenue_below_10k === true && (
-                  <QBool value={q.cash_reserve_validated} label="Caixa/reserva para investir validado" citation={q.cash_reserve_citation} />
+                  <QBool value={q.cash_reserve_validated} label="Caixa para investir validado" />
                 )}
               </div>
+
+              {/* Citação obrigatória do budget quando faturamento < R$10k */}
+              {q.revenue_below_10k === true && q.cash_reserve_citation && (
+                <div className="bg-gray-800/40 rounded-lg px-4 py-3">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1.5">📌 Evidência — validação do budget</p>
+                  <p className="text-xs text-gray-300 italic leading-relaxed border-l-2 border-yellow-600/60 pl-3">
+                    {q.cash_reserve_citation}
+                  </p>
+                </div>
+              )}
 
               {/* Alerta crítico */}
               {q.revenue_below_10k === true && q.cash_reserve_validated !== true && (
@@ -303,8 +306,8 @@ function CallModal({ call, onClose }: { call: Call; onClose: () => void }) {
               )}
 
               {/* Decisor */}
-              <div className="border border-gray-700 rounded-lg p-3 space-y-2">
-                <p className="text-xs text-gray-500">🧠 Decisor na ligação</p>
+              <div className="border border-gray-700 rounded-lg p-3">
+                <p className="text-xs text-gray-500 mb-2">🧠 Decisor na ligação</p>
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className={`text-sm font-bold px-3 py-1 rounded-full border ${
                     q.decision_maker === 'CONFIRMADO'
@@ -321,11 +324,6 @@ function CallModal({ call, onClose }: { call: Call; onClose: () => void }) {
                     <p className="text-gray-400 text-sm">{q.decision_maker_note}</p>
                   )}
                 </div>
-                {q.decision_maker_citation && (
-                  <p className="text-xs text-gray-500 italic pl-3 border-l-2 border-gray-700 leading-relaxed">
-                    {q.decision_maker_citation}
-                  </p>
-                )}
               </div>
             </section>
           )}

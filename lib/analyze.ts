@@ -6,11 +6,8 @@ function getGroq() {
 
 export interface Qualification {
   cnpj_validated: boolean | null
-  cnpj_citation: string | null
   revenue_validated: boolean | null
-  revenue_citation: string | null
   team_size_validated: boolean | null
-  team_size_citation: string | null
   revenue_below_10k: boolean | null
   cash_reserve_validated: boolean | null
   cash_reserve_citation: string | null
@@ -24,7 +21,6 @@ export interface Qualification {
   maturity_justification: string
   decision_maker: 'CONFIRMADO' | 'PARCIAL' | 'NÃO MAPEADO' | 'DESQUALIFICADO'
   decision_maker_note: string
-  decision_maker_citation: string | null
 }
 
 export interface CallAnalysis {
@@ -69,11 +65,8 @@ JSON esperado:
 
   "qualification": {
     "cnpj_validated": true,
-    "cnpj_citation": "🟢 SDR [1min]: \"Você tem CNPJ registrado?\" 🟣 CLIENTE [1min]: \"Tenho sim, a barbearia tem CNPJ.\"",
     "revenue_validated": true,
-    "revenue_citation": "🟣 CLIENTE [3min]: \"A gente fatura em torno de vinte e cinco mil por mês, mas tá oscilando.\"",
     "team_size_validated": false,
-    "team_size_citation": null,
     "revenue_below_10k": false,
     "cash_reserve_validated": null,
     "cash_reserve_citation": null,
@@ -86,8 +79,7 @@ JSON esperado:
     "maturity_level": "Médio (Dono de Cadeira)",
     "maturity_justification": "Tem visão de crescimento mas ainda opera no operacional",
     "decision_maker": "CONFIRMADO",
-    "decision_maker_note": "É o dono e demonstrou autonomia total para decidir",
-    "decision_maker_citation": "🟣 CLIENTE [7min]: \"Sou eu que decido tudo aqui, não preciso consultar ninguém.\""
+    "decision_maker_note": "É o dono e demonstrou autonomia total para decidir"
   }
 }
 
@@ -101,25 +93,14 @@ REGRAS IMPORTANTES:
   • cnpj_validated/revenue_validated/team_size_validated: true se o SDR perguntou e obteve resposta, false se perguntou mas não obteve, null se não perguntou.
   • revenue_below_10k: true se faturamento mencionado < R$10.000, false se >= R$10.000, null se não mencionado.
   • cash_reserve_validated: true/false se o SDR perguntou sobre caixa (apenas quando revenue_below_10k = true), null nos demais casos.
+  • cash_reserve_citation: OBRIGATÓRIO quando revenue_below_10k = true. Trecho LITERAL (máx. 30 palavras) onde o SDR pergunta e/ou o lead responde sobre ter caixa ou reserva para investir. Formato: "🟢 SDR [Xmin]: \"trecho exato\"" e/ou "🟣 CLIENTE [Xmin]: \"trecho exato\"". Use a minutagem aproximada do trecho na transcrição. Se o SDR não perguntou sobre isso → null. NUNCA invente — ausência de trecho = ausência de evidência.
   • disqualification_reason: null se lead está qualificado, caso contrário descreva o motivo.
   • monthly_revenue: valor exato mencionado ou "não identificado".
   • team_size: número mencionado ou "não citado".
   • main_complaints: array com as dificuldades reais relatadas (mínimo 1, máximo 5).
   • generated_meeting: true se agendamento confirmado, false se não.
   • maturity_level: exatamente um de: "Baixo (Operacional)", "Médio (Dono de Cadeira)", "Alto (Empreendedor)", "Não identificado".
-  • decision_maker: exatamente um de: "CONFIRMADO", "PARCIAL", "NÃO MAPEADO", "DESQUALIFICADO".
-
-REGRA CRÍTICA — CITAÇÕES OBRIGATÓRIAS:
-  Cada campo *_citation deve conter um trecho LITERAL extraído da transcrição (máx. 30 palavras) que comprova a validação correspondente.
-  Formato obrigatório: "🟢 SDR [Xmin]: \"trecho exato\"" ou "🟣 CLIENTE [Xmin]: \"trecho exato\""
-  Use a minutagem aproximada com base na posição do trecho na transcrição.
-  Regras:
-  • Se a validação não ocorreu (null/false por falta de pergunta) → citation = null.
-  • Se o SDR perguntou mas o cliente não respondeu → citation = a pergunta do SDR + null como resposta.
-  • NUNCA invente trechos — se não há evidência literal → null.
-  • cash_reserve_citation: obrigatório quando revenue_below_10k = true e cash_reserve_validated ≠ null.
-  • decision_maker_citation: sempre obrigatório (null apenas se o assunto nunca surgiu).
-  • Ausência de trecho = ausência de evidência. Não cite trechos vagos como prova de execução.`
+  • decision_maker: exatamente um de: "CONFIRMADO", "PARCIAL", "NÃO MAPEADO", "DESQUALIFICADO".`
 
   const response = await getGroq().chat.completions.create({
     model: 'llama-3.3-70b-versatile',
