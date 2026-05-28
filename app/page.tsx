@@ -539,6 +539,8 @@ function Dashboard() {
   const [metricsLoading, setMetricsLoading] = useState(false)
   const [metricsStart, setMetricsStart] = useState(todayStr)
   const [metricsEnd, setMetricsEnd] = useState(todayStr)
+  const [reprocessing, setReprocessing] = useState(false)
+  const [reprocessResult, setReprocessResult] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     try {
@@ -588,6 +590,35 @@ function Dashboard() {
       setSyncResult('Erro de conexão')
     } finally {
       setSyncing(false)
+    }
+  }
+
+  async function handleReprocess() {
+    setReprocessing(true)
+    setReprocessResult(null)
+    try {
+      const res = await fetch('/api/reprocess-pending', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 3 }),
+      })
+      const json = await res.json()
+      if (json.error) {
+        setReprocessResult(`Erro: ${json.error}`)
+      } else if (json.processed === 0 && json.failed === 0) {
+        setReprocessResult('Nenhuma ligação pendente')
+      } else {
+        const parts = []
+        if (json.processed > 0) parts.push(`✓ ${json.processed} processadas`)
+        if (json.failed > 0) parts.push(`✗ ${json.failed} com erro`)
+        if (json.pendingLeft > 0) parts.push(`${json.pendingLeft} ainda pendentes`)
+        setReprocessResult(parts.join(' · '))
+        fetchData()
+      }
+    } catch {
+      setReprocessResult('Erro de conexão')
+    } finally {
+      setReprocessing(false)
     }
   }
 
@@ -742,18 +773,43 @@ function Dashboard() {
 
         {/* Stats */}
         {stats && stats.total > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            {[
-              { label: 'Total', value: stats.total },
-              { label: 'Hoje', value: stats.today },
-              { label: 'Analisadas', value: stats.done },
-              { label: 'Aguardando', value: stats.processing },
-            ].map(s => (
-              <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-xs text-gray-500 mb-1">{s.label}</p>
-                <p className="text-2xl font-bold text-white">{s.value}</p>
+          <div className="mb-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { label: 'Total', value: stats.total },
+                { label: 'Hoje', value: stats.today },
+                { label: 'Analisadas', value: stats.done },
+                { label: 'Aguardando', value: stats.processing },
+              ].map(s => (
+                <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                  <p className="text-xs text-gray-500 mb-1">{s.label}</p>
+                  <p className="text-2xl font-bold text-white">{s.value}</p>
+                </div>
+              ))}
+            </div>
+            {/* Botão reprocessar: só aparece quando há pendentes */}
+            {stats.processing > 0 && (
+              <div className="flex items-center gap-3 mt-3">
+                <button
+                  onClick={handleReprocess}
+                  disabled={reprocessing}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                  style={{ background: '#1e2d45', color: '#93c5fd', border: '1px solid #2d4a6e' }}
+                >
+                  {reprocessing ? (
+                    <>
+                      <span className="inline-block w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                      Processando…
+                    </>
+                  ) : (
+                    <>⟳ Reprocessar pendentes ({stats.processing})</>
+                  )}
+                </button>
+                {reprocessResult && (
+                  <span className="text-xs text-gray-400">{reprocessResult}</span>
+                )}
               </div>
-            ))}
+            )}
           </div>
         )}
 
