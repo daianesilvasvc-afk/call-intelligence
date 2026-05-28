@@ -6,13 +6,13 @@ function getGroq() {
 
 export interface Qualification {
   cnpj_validated: boolean | null
+  revenue_validated: boolean | null
   team_size_validated: boolean | null
-  revenue_bracket: 'abaixo_10k' | '10k_30k' | 'acima_30k' | 'não_identificado'
-  monthly_revenue: string
-  investment_capacity_validated: boolean | null
+  revenue_below_10k: boolean | null
   cash_reserve_validated: boolean | null
   cash_reserve_citation: string | null
   disqualification_reason: string | null
+  monthly_revenue: string
   team_size: string
   main_complaints: string[]
   generated_meeting: boolean
@@ -65,13 +65,13 @@ JSON esperado:
 
   "qualification": {
     "cnpj_validated": true,
-    "team_size_validated": true,
-    "revenue_bracket": "10k_30k",
-    "monthly_revenue": "R$ 25.000",
-    "investment_capacity_validated": true,
+    "revenue_validated": true,
+    "team_size_validated": false,
+    "revenue_below_10k": false,
     "cash_reserve_validated": null,
     "cash_reserve_citation": null,
     "disqualification_reason": null,
+    "monthly_revenue": "R$ 25.000",
     "team_size": "4 barbeiros",
     "main_complaints": ["dificuldade para reter clientes", "depende da presença do dono"],
     "generated_meeting": true,
@@ -90,16 +90,12 @@ REGRAS IMPORTANTES:
 - Se alguma informação do briefing não foi mencionada, escreva "Não mencionado na ligação".
 - Use as próprias palavras do lead nas dores — não generalize.
 - No campo "qualification":
-  • cnpj_validated / team_size_validated: true se o SDR perguntou e obteve resposta, false se perguntou mas não obteve, null se não perguntou.
-  • revenue_bracket: classifique o faturamento mensal mencionado em exatamente um de: "abaixo_10k", "10k_30k", "acima_30k", "não_identificado".
-  • monthly_revenue: valor exato mencionado ou "não identificado".
-  • investment_capacity_validated — PERGUNTA-GUIA: "O lead tem capacidade financeira para investir?"
-    - true: faturamento >= R$10k confirmado na ligação; OU faturamento < R$10k E o SDR perguntou sobre caixa/reserva E o lead confirmou que tem.
-    - false: faturamento < R$10k E o SDR NÃO perguntou sobre caixa/reserva (não validou a capacidade); OU lead confirmou não ter recursos.
-    - null: faturamento não foi mencionado na ligação.
-  • cash_reserve_validated: true/false se o SDR perguntou sobre caixa/reserva para investir (preencher APENAS quando revenue_bracket = "abaixo_10k", null nos demais casos).
-  • cash_reserve_citation: SOMENTE quando revenue_bracket = "abaixo_10k". Trecho LITERAL da transcrição (máx. 30 palavras) onde o SDR pergunta e/ou o lead responde sobre ter caixa ou reserva para investir. Formato exato: "🟢 SDR [Xmin]: \"frase exata\"" ou "🟣 CLIENTE [Xmin]: \"frase exata\"". Use minutagem aproximada. Se o SDR não perguntou → null. NUNCA invente. NÃO use citações em nenhum outro campo.
+  • cnpj_validated/revenue_validated/team_size_validated: true se o SDR perguntou e obteve resposta, false se perguntou mas não obteve, null se não perguntou.
+  • revenue_below_10k: true se faturamento mencionado < R$10.000, false se >= R$10.000, null se não mencionado.
+  • cash_reserve_validated: true/false se o SDR perguntou sobre caixa/reserva para investir (preencher APENAS quando revenue_below_10k = true, null nos demais casos).
+  • cash_reserve_citation: SOMENTE quando revenue_below_10k = true. Trecho LITERAL da transcrição (máx. 30 palavras) onde o SDR pergunta e/ou o lead responde sobre ter caixa ou reserva para investir. Formato exato: "🟢 SDR [Xmin]: \"frase exata\"" ou "🟣 CLIENTE [Xmin]: \"frase exata\"". Use minutagem aproximada. Se o SDR não perguntou → null. NUNCA invente. NÃO use citações em nenhum outro campo.
   • disqualification_reason: null se lead está qualificado, caso contrário descreva o motivo.
+  • monthly_revenue: valor exato mencionado ou "não identificado".
   • team_size: número mencionado ou "não citado".
   • main_complaints: array com as dificuldades reais relatadas (mínimo 1, máximo 5).
   • generated_meeting: true se agendamento confirmado, false se não.
