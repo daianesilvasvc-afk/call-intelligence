@@ -154,10 +154,78 @@ function QBool({ value, label }: { value: boolean | null; label: string }) {
   )
 }
 
+// ─── NEPQ helpers ─────────────────────────────────────────────────────────────
+function NotaBadge({ nota }: { nota: number | 'NA' | null }) {
+  if (nota === null || nota === undefined) return null
+  const n = nota === 'NA' ? 'NA' : Number(nota)
+  const cls = n === 'NA' ? 'bg-gray-700 text-gray-400'
+    : n >= 5 ? 'bg-emerald-500/25 text-emerald-300'
+    : n >= 4 ? 'bg-blue-500/25 text-blue-300'
+    : n >= 3 ? 'bg-yellow-500/25 text-yellow-300'
+    : n >= 1 ? 'bg-red-500/25 text-red-300'
+    : 'bg-gray-700/50 text-gray-500'
+  return (
+    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cls}`}>
+      {n === 'NA' ? 'NA' : `${n}/5`}
+    </span>
+  )
+}
+
+function BantBadge({ status }: { status: string | null }) {
+  if (!status) return null
+  const cls = status === 'CONFIRMADO' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+    : status === 'PARCIAL' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40'
+    : status === 'DESQUALIFICADO' ? 'bg-red-500/20 text-red-400 border-red-500/40'
+    : 'bg-gray-700 text-gray-400 border-gray-600'
+  return <span className={`text-xs font-bold px-2 py-0.5 rounded border ${cls}`}>{status}</span>
+}
+
+function TempBadge({ temp }: { temp: string | null }) {
+  if (!temp) return null
+  const map: Record<string, string> = {
+    'FRIO': '❄️ FRIO',
+    'MORNO': '🌤 MORNO',
+    'QUENTE': '🔥 QUENTE',
+    'PRONTO PRA COMPRAR': '✅ PRONTO PRA COMPRAR',
+  }
+  const cls = temp === 'FRIO' ? 'bg-blue-500/20 text-blue-300'
+    : temp === 'MORNO' ? 'bg-yellow-500/20 text-yellow-300'
+    : temp === 'QUENTE' ? 'bg-orange-500/20 text-orange-300'
+    : 'bg-emerald-500/20 text-emerald-300'
+  return <span className={`text-xs font-bold px-3 py-1 rounded-full ${cls}`}>{map[temp] ?? temp}</span>
+}
+
+function NepqCriterionBlock({
+  label, criterion
+}: {
+  label: string
+  criterion: { nota: number | 'NA'; trecho_principal?: string | null; trecho_oferta?: string | null; feedback: string; sugestao: string | null; prolixidade?: boolean }
+}) {
+  const trecho = ('trecho_principal' in criterion ? criterion.trecho_principal : null)
+    ?? ('trecho_oferta' in criterion ? criterion.trecho_oferta : null)
+  return (
+    <div className="bg-gray-800/50 rounded-lg p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{label}</span>
+        <NotaBadge nota={criterion.nota} />
+      </div>
+      {trecho && (
+        <p className="text-xs text-gray-400 italic border-l-2 border-gray-600 pl-2 leading-relaxed">{trecho}</p>
+      )}
+      <p className="text-xs text-gray-300 leading-relaxed">{criterion.feedback}</p>
+      {criterion.sugestao && (
+        <p className="text-xs text-blue-400 leading-relaxed">🛠 {criterion.sugestao}</p>
+      )}
+    </div>
+  )
+}
+
 function CallModal({ call, onClose }: { call: Call; onClose: () => void }) {
   const followUps: string[] = call.follow_ups ? JSON.parse(call.follow_ups) : []
   const keyPoints: string[] = call.key_points ? JSON.parse(call.key_points) : []
   const q = call.qualification ? JSON.parse(call.qualification) : null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const nepq: any = call.nepq_analysis ? JSON.parse(call.nepq_analysis) : null
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto">
@@ -206,6 +274,148 @@ function CallModal({ call, onClose }: { call: Call; onClose: () => void }) {
               </ul>
             </section>
           )}
+          {/* ── NEPQ + BANT Analysis ── */}
+          {nepq && (
+            <section className="space-y-4">
+              {/* Score + Temperatura */}
+              <div className="flex items-center justify-between bg-gray-800/60 border border-gray-700 rounded-xl px-5 py-4">
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">📊 Score do Script</p>
+                  <p className={`text-2xl font-bold ${
+                    nepq.score_script >= 80 ? 'text-emerald-400'
+                    : nepq.score_script >= 60 ? 'text-yellow-400'
+                    : 'text-red-400'
+                  }`}>{nepq.score_script}%</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">🌡 Temperatura</p>
+                  <TempBadge temp={nepq.temperatura?.classificacao} />
+                </div>
+              </div>
+
+              {/* Critérios NEPQ */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Critérios NEPQ</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {nepq.investigacao && <NepqCriterionBlock label="1 · Investigação da Dor" criterion={nepq.investigacao} />}
+                  {nepq.sonho && <NepqCriterionBlock label="2 · Descoberta do Sonho" criterion={nepq.sonho} />}
+                  {nepq.solucao && <NepqCriterionBlock label="3 · Apresentação da Solução" criterion={nepq.solucao} />}
+                  {nepq.agendamento && <NepqCriterionBlock label="4 · Agendamento" criterion={{ ...nepq.agendamento, trecho_principal: nepq.agendamento.trecho_oferta }} />}
+                </div>
+              </div>
+
+              {/* Ponto de perda */}
+              {nepq.agendamento?.perda_agendamento?.ocorreu && (
+                <div className="bg-red-950/40 border border-red-700/50 rounded-xl p-4 space-y-2">
+                  <p className="text-xs font-semibold text-red-400 uppercase tracking-wider">🚨 Ponto de Perda do Agendamento</p>
+                  {nepq.agendamento.perda_agendamento.minutagem && (
+                    <p className="text-xs text-red-300">⏱ {nepq.agendamento.perda_agendamento.minutagem}</p>
+                  )}
+                  {nepq.agendamento.perda_agendamento.o_que_aconteceu && (
+                    <p className="text-xs text-gray-300">{nepq.agendamento.perda_agendamento.o_que_aconteceu}</p>
+                  )}
+                  {nepq.agendamento.perda_agendamento.trecho && (
+                    <p className="text-xs text-gray-400 italic border-l-2 border-red-700/60 pl-2">{nepq.agendamento.perda_agendamento.trecho}</p>
+                  )}
+                  {nepq.agendamento.perda_agendamento.causa_raiz && (
+                    <p className="text-xs text-red-300">📌 {nepq.agendamento.perda_agendamento.causa_raiz}</p>
+                  )}
+                  {nepq.agendamento.perda_agendamento.o_que_deveria && (
+                    <p className="text-xs text-blue-400">🛠 {nepq.agendamento.perda_agendamento.o_que_deveria}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Prolixidade */}
+              {nepq.prolixidade?.detectada && nepq.prolixidade.momentos?.length > 0 && (
+                <div className="bg-orange-950/30 border border-orange-700/40 rounded-xl p-4 space-y-2">
+                  <p className="text-xs font-semibold text-orange-400 uppercase tracking-wider">⚠️ Prolixidade Detectada</p>
+                  {nepq.prolixidade.momentos.map((m: { minutagem: string; descricao: string; impacto: string; sugestao: string }, i: number) => (
+                    <div key={i} className="space-y-1">
+                      <p className="text-xs text-orange-300 font-medium">⏱ {m.minutagem}</p>
+                      <p className="text-xs text-gray-300">{m.descricao}</p>
+                      {m.impacto && <p className="text-xs text-gray-400">Impacto: {m.impacto}</p>}
+                      {m.sugestao && <p className="text-xs text-blue-400">🛠 {m.sugestao}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* BANT */}
+              {nepq.bant && (
+                <div className="bg-gray-800/40 border border-gray-700 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">⚖️ Qualificação BANT</p>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                      nepq.bant.score === 4 ? 'bg-emerald-500/20 text-emerald-400'
+                      : nepq.bant.score === 3 ? 'bg-blue-500/20 text-blue-400'
+                      : nepq.bant.score === 2 ? 'bg-yellow-500/20 text-yellow-400'
+                      : 'bg-red-500/20 text-red-400'
+                    }`}>{nepq.bant.score}/4</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { key: 'B', label: 'Budget', pilar: nepq.bant.budget },
+                      { key: 'A', label: 'Authority', pilar: nepq.bant.authority },
+                      { key: 'N', label: 'Need', pilar: nepq.bant.need },
+                      { key: 'T', label: 'Timeline', pilar: nepq.bant.timeline },
+                    ].map(({ key, label, pilar }) => (
+                      <div key={key} className="bg-gray-900/60 rounded-lg p-2 space-y-1.5">
+                        <p className="text-xs text-gray-500">{key} — {label}</p>
+                        <BantBadge status={pilar?.status} />
+                        {pilar?.trecho && (
+                          <p className="text-xs text-gray-500 italic leading-relaxed border-l border-gray-700 pl-1.5">{pilar.trecho}</p>
+                        )}
+                        {pilar?.observacao && (
+                          <p className="text-xs text-gray-400">{pilar.observacao}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {nepq.bant.recomendacao && (
+                    <div className="bg-gray-900/60 rounded-lg p-3">
+                      <p className="text-xs text-gray-500 mb-1">📌 Recomendação para o Closer</p>
+                      <p className="text-xs text-gray-300">{nepq.bant.recomendacao}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* DISC + Temperatura detalhada */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {nepq.disc && (
+                  <div className="bg-gray-800/40 border border-gray-700 rounded-xl p-4 space-y-2">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">🧠 Perfil DISC</p>
+                    <span className="inline-block text-xs font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300">{nepq.disc.perfil}</span>
+                    <p className="text-xs text-gray-300 leading-relaxed">{nepq.disc.explicacao}</p>
+                    {nepq.disc.orientacoes && (
+                      <p className="text-xs text-blue-400 leading-relaxed">🎯 {nepq.disc.orientacoes}</p>
+                    )}
+                    {nepq.disc.trechos?.map((t: string, i: number) => (
+                      <p key={i} className="text-xs text-gray-500 italic border-l border-gray-700 pl-2">{t}</p>
+                    ))}
+                  </div>
+                )}
+                {nepq.temperatura && (
+                  <div className="bg-gray-800/40 border border-gray-700 rounded-xl p-4 space-y-2">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">🌡 Temperatura do Lead</p>
+                    <TempBadge temp={nepq.temperatura.classificacao} />
+                    <p className="text-xs text-gray-300 leading-relaxed">{nepq.temperatura.nivel_consciencia}</p>
+                    {nepq.temperatura.espontaneidade && (
+                      <p className="text-xs text-gray-400 leading-relaxed">{nepq.temperatura.espontaneidade}</p>
+                    )}
+                    {nepq.temperatura.observacoes && (
+                      <p className="text-xs text-yellow-400 leading-relaxed">⚠️ {nepq.temperatura.observacoes}</p>
+                    )}
+                    {nepq.temperatura.citacoes?.map((c: string, i: number) => (
+                      <p key={i} className="text-xs text-gray-500 italic border-l border-gray-700 pl-2">{c}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
           {call.closer_briefing && (
             <section className="bg-blue-950/30 border border-blue-800/40 rounded-xl p-5">
               <h3 className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-4">📋 Briefing NEPQ para o Closer</h3>

@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
           key_points: JSON.stringify(analysis.key_points),
           whatsapp_msg: analysis.whatsapp_msg,
           qualification: JSON.stringify(analysis.qualification),
+          nepq_analysis: JSON.stringify(analysis.nepq_analysis),
           status: 'done',
         })
 

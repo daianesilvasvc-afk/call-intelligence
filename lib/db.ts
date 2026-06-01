@@ -81,19 +81,25 @@ let _initPromise: Promise<void> | null = null
 
 function ensureSchema(): Promise<void> {
   if (!_initPromise) {
-    _initPromise = executeBatch([
-      {
-        sql: `CREATE TABLE IF NOT EXISTS calls (
-          id TEXT PRIMARY KEY, call_id TEXT UNIQUE, caller TEXT, called TEXT,
-          direction TEXT, started_at TEXT, ended_at TEXT, duration INTEGER,
-          record_url TEXT, transcript TEXT, summary TEXT, closer_briefing TEXT,
-          follow_ups TEXT, sentiment TEXT, key_points TEXT, whatsapp_msg TEXT,
-          qualification TEXT, status TEXT DEFAULT 'pending', error TEXT,
-          created_at TEXT DEFAULT (datetime('now'))
-        )`,
-      },
-      { sql: `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)` },
-    ])
+    _initPromise = (async () => {
+      await executeBatch([
+        {
+          sql: `CREATE TABLE IF NOT EXISTS calls (
+            id TEXT PRIMARY KEY, call_id TEXT UNIQUE, caller TEXT, called TEXT,
+            direction TEXT, started_at TEXT, ended_at TEXT, duration INTEGER,
+            record_url TEXT, transcript TEXT, summary TEXT, closer_briefing TEXT,
+            follow_ups TEXT, sentiment TEXT, key_points TEXT, whatsapp_msg TEXT,
+            qualification TEXT, status TEXT DEFAULT 'pending', error TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+          )`,
+        },
+        { sql: `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)` },
+      ])
+      // Migration: add nepq_analysis column to existing tables
+      try {
+        await execute(`ALTER TABLE calls ADD COLUMN nepq_analysis TEXT`)
+      } catch { /* column already exists — safe to ignore */ }
+    })()
   }
   return _initPromise
 }
@@ -120,6 +126,7 @@ export interface Call {
   key_points: string | null
   whatsapp_msg: string | null
   qualification: string | null
+  nepq_analysis: string | null
   status: CallStatus
   error: string | null
   created_at: string
@@ -128,7 +135,7 @@ export interface Call {
 // --- Calls ---
 
 export async function upsertCall(
-  call: Omit<Call, 'created_at' | 'transcript' | 'summary' | 'closer_briefing' | 'follow_ups' | 'sentiment' | 'key_points' | 'whatsapp_msg' | 'qualification' | 'error'>
+  call: Omit<Call, 'created_at' | 'transcript' | 'summary' | 'closer_briefing' | 'follow_ups' | 'sentiment' | 'key_points' | 'whatsapp_msg' | 'qualification' | 'nepq_analysis' | 'error'>
 ): Promise<void> {
   await ensureSchema()
   await execute(
@@ -146,7 +153,7 @@ export async function upsertCall(
 export async function updateCallAnalysis(id: string, data: {
   transcript?: string; summary?: string; closer_briefing?: string; follow_ups?: string
   sentiment?: string; key_points?: string; whatsapp_msg?: string; qualification?: string
-  status: CallStatus; error?: string
+  nepq_analysis?: string; status: CallStatus; error?: string
 }): Promise<void> {
   await ensureSchema()
   await execute(
@@ -155,11 +162,12 @@ export async function updateCallAnalysis(id: string, data: {
        closer_briefing = COALESCE(?, closer_briefing), follow_ups = COALESCE(?, follow_ups),
        sentiment = COALESCE(?, sentiment), key_points = COALESCE(?, key_points),
        whatsapp_msg = COALESCE(?, whatsapp_msg), qualification = COALESCE(?, qualification),
+       nepq_analysis = COALESCE(?, nepq_analysis),
        status = ?, error = ?
      WHERE id = ?`,
     [data.transcript ?? null, data.summary ?? null, data.closer_briefing ?? null,
      data.follow_ups ?? null, data.sentiment ?? null, data.key_points ?? null,
-     data.whatsapp_msg ?? null, data.qualification ?? null,
+     data.whatsapp_msg ?? null, data.qualification ?? null, data.nepq_analysis ?? null,
      data.status, data.error ?? null, id]
   )
 }
