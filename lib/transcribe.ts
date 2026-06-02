@@ -16,40 +16,23 @@ export async function transcribeAudio(audioUrl: string): Promise<string> {
   const ext = getExt(contentType, audioUrl)
   const file = new File([buffer], `recording.${ext}`, { type: contentType })
 
-  const MAX_RETRIES = 4
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const transcription = await getGroq().audio.transcriptions.create({
-        file,
-        model: 'whisper-large-v3',
-        language: 'pt',
-        response_format: 'text',
-      })
-      return transcription as unknown as string
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      const is429 = msg.includes('429') || msg.includes('rate_limit_exceeded')
-
-      if (!is429 || attempt === MAX_RETRIES) throw err
-
-      // Parse "Please try again in Xm Ys" from the error message
-      const matchMin = msg.match(/(\d+)m(\d+(?:\.\d+)?)s/)
-      const matchSec = !matchMin && msg.match(/(\d+(?:\.\d+)?)s/)
-      let waitMs: number
-      if (matchMin) {
-        waitMs = (parseInt(matchMin[1]) * 60 + parseFloat(matchMin[2])) * 1000 + 2000
-      } else if (matchSec) {
-        waitMs = parseFloat(matchSec[1]) * 1000 + 2000
-      } else {
-        waitMs = attempt * 30_000
-      }
-
-      console.log(`[transcribe] Rate limit 429 — aguardando ${Math.round(waitMs / 1000)}s antes de tentar novamente (tentativa ${attempt}/${MAX_RETRIES})`)
-      await new Promise(r => setTimeout(r, waitMs))
+  try {
+    const transcription = await getGroq().audio.transcriptions.create({
+      file,
+      model: 'whisper-large-v3',
+      language: 'pt',
+      response_format: 'text',
+    })
+    return transcription as unknown as string
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('rate_limit_exceeded') || msg.includes('429')) {
+      const match = msg.match(/try again in ([^"]+)/)
+      const when = match ? match[1].trim() : 'alguns minutos'
+      throw new Error(`Rate limit Whisper — tente novamente em ${when}`)
     }
+    throw err
   }
-
-  throw new Error('Transcription failed after max retries')
 }
 
 function getExt(contentType: string, url: string): string {
