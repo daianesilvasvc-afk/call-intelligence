@@ -1,19 +1,19 @@
 export interface SDR {
   name: string
   email: string
-  // WhatsApp number used on Wavoip (format: 5511912345678 — country + area + number, no spaces/dashes)
+  // Número de ramal ou DID do SDR no Wavoip (formato: 5511912345678 — DDI + DDD + número, sem espaços)
   phone?: string
 }
 
 export const SDRS: SDR[] = [
-  { name: 'Nátali Helena',           email: 'natalihelenapodium@gmail.com',            phone: '' },
-  { name: 'Fernanda Piemonte',       email: 'fernanda.podiumeducacao@gmail.com',       phone: '' },
-  { name: 'Kevin Amaro de Sousa',    email: 'keevin.amaro@gmail.com',                  phone: '' },
-  { name: 'Samuel',                  email: 'samuel.podiumeducacao@gmail.com',         phone: '' },
-  { name: 'Matheos',                 email: 'matheos.podiumeducacao@gmail.com',        phone: '' },
-  { name: 'Amanda',                  email: 'amanda.podiumeducacao@gmail.com',         phone: '' },
-  { name: 'Maicon',                  email: 'maiconoliveira.podiumeducacao@gmail.com', phone: '' },
-  { name: 'Edrius Vieira',           email: 'edrius.podiumedu@gmail.com',              phone: '' },
+  { name: 'Edrius Vieira',           email: 'edrius.podiumedu@gmail.com',              phone: '2001' },
+  { name: 'Nátali Helena',           email: 'natalihelenapodium@gmail.com',            phone: '2002' },
+  { name: 'Fernanda Piemonte',       email: 'fernanda.podiumeducacao@gmail.com',       phone: '2003' },
+  { name: 'Maicon',                  email: 'maiconoliveira.podiumeducacao@gmail.com', phone: '2004' },
+  { name: 'Samuel',                  email: 'samuel.podiumeducacao@gmail.com',         phone: '2005' },
+  { name: 'Matheos',                 email: 'matheos.podiumeducacao@gmail.com',        phone: '2006' },
+  { name: 'Amanda',                  email: 'amanda.podiumeducacao@gmail.com',         phone: '2007' },
+  { name: 'Kevin Amaro de Sousa',    email: 'keevin.amaro@gmail.com',                  phone: '2009' },
 ]
 
 // --- Email-based lookup (legacy / admin use) ---
