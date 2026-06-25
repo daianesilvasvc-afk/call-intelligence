@@ -7,7 +7,7 @@ import { SDRS } from '@/lib/sdrs'
 
 interface Stats { total: number; today: number; done: number; processing: number }
 interface ApiResponse { calls: Call[]; stats: Stats }
-interface Settings { api4com_token: string | null; groq_api_key: string | null }
+interface Settings { wavoip_token: string | null; groq_api_key: string | null }
 interface MetricRow {
   sdr: string; date: string
   total: number; connected: number; over50s: number; over3min: number
@@ -52,14 +52,14 @@ function SettingsModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
   const [error, setError] = useState('')
 
   async function save() {
-    if (!token || !groq) { setError('Preencha os dois campos'); return }
+    if (!groq) { setError('Informe a chave Groq'); return }
     setSaving(true)
     setError('')
     try {
       await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ api4com_token: token, groq_api_key: groq }),
+        body: JSON.stringify({ wavoip_token: token || undefined, groq_api_key: groq }),
       })
       onSaved()
       onClose()
@@ -70,6 +70,10 @@ function SettingsModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
     }
   }
 
+  const webhookUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/api/webhook/wavoip`
+    : '/api/webhook/wavoip'
+
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md">
@@ -78,19 +82,26 @@ function SettingsModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
           <button onClick={onClose} className="text-gray-500 hover:text-white">✕</button>
         </div>
         <div className="p-6 space-y-5">
+          <div className="bg-gray-950 border border-gray-700 rounded-lg p-3">
+            <p className="text-xs font-medium text-gray-400 mb-1.5">URL do Webhook — Wavoip</p>
+            <p className="text-xs font-mono text-emerald-400 break-all">{webhookUrl}</p>
+            <p className="text-xs text-gray-600 mt-1.5">
+              Wavoip → Dispositivo → Integrações → Webhook
+            </p>
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-1.5">
-              API Token — API4COM
+              Token — Wavoip <span className="text-gray-600 font-normal">(opcional)</span>
             </label>
             <input
               type="password"
               value={token}
               onChange={e => setToken(e.target.value)}
-              placeholder="Bearer token da API4COM"
+              placeholder="Token do dispositivo Wavoip"
               className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
             />
             <p className="text-xs text-gray-600 mt-1">
-              Painel API4COM → Usuários → Tokens de acesso
+              Wavoip → Dispositivo → Configurações
             </p>
           </div>
           <div>
@@ -668,7 +679,7 @@ function MetricsView({ rows, loading, startDate, endDate, onStartChange, onEndCh
       {!rows && !loading && (
         <p className="text-center text-gray-500 py-20">Selecione o período e clique em "Carregar métricas"</p>
       )}
-      {loading && <p className="text-center text-gray-500 py-20">Buscando ligações da API4COM...</p>}
+      {loading && <p className="text-center text-gray-500 py-20">Carregando...</p>}
 
       {rows && rows.length === 0 && (
         <p className="text-center text-gray-500 py-20">Nenhuma ligação encontrada no período</p>
@@ -859,7 +870,7 @@ function Dashboard() {
     return p.toString() ? `/?${p.toString()}` : '/'
   }
 
-  const isConfigured = settings?.api4com_token && settings?.groq_api_key
+  const isConfigured = settings?.groq_api_key
   const calls = data?.calls ?? []
   const stats = data?.stats
   const hasProcessing = calls.some(c => c.status === 'processing')
@@ -971,7 +982,7 @@ function Dashboard() {
         {!loading && !isConfigured && (
           <div className="bg-blue-950/30 border border-blue-800/40 rounded-2xl p-6 mb-8 text-center">
             <p className="text-blue-300 font-medium mb-1">Configure as credenciais para começar</p>
-            <p className="text-blue-400/70 text-sm mb-4">Você precisará do token da API4COM e de uma chave Groq gratuita</p>
+            <p className="text-blue-400/70 text-sm mb-4">Você precisará de uma chave Groq gratuita e configurar o webhook no Wavoip</p>
             <button
               onClick={() => setShowSettings(true)}
               className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-5 py-2 rounded-xl transition-colors"
@@ -1023,33 +1034,12 @@ function Dashboard() {
           </div>
         )}
 
-        {/* Sync bar */}
+        {/* Webhook info bar */}
         {isConfigured && (
-          <div className="flex flex-col gap-2 mb-6">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-gray-500 font-medium">Período:</span>
-              <input
-                type="date"
-                value={syncStart}
-                onChange={e => setSyncStart(e.target.value)}
-                className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]"
-              />
-              <span className="text-xs text-gray-500">até</span>
-              <input
-                type="date"
-                value={syncEnd}
-                onChange={e => setSyncEnd(e.target.value)}
-                className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]"
-              />
-              <button
-                onClick={handleSync}
-                disabled={syncing}
-                className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors flex items-center gap-2"
-              >
-                {syncing ? '⏳ Sincronizando...' : '↻ Sincronizar da API4COM'}
-              </button>
-            </div>
-            {syncResult && <p className="text-sm text-gray-400 pl-1">{syncResult}</p>}
+          <div className="flex items-center gap-3 mb-6 bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
+            <span className="text-xs text-gray-500 shrink-0">Webhook ativo:</span>
+            <span className="text-xs font-mono text-emerald-400 truncate">/api/webhook/wavoip</span>
+            <span className="ml-auto text-xs text-gray-600">As ligações chegam automaticamente pelo Wavoip</span>
           </div>
         )}
 
