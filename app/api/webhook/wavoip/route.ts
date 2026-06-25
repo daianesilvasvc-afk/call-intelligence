@@ -9,9 +9,29 @@ import type { WavoipWebhookPayload, WavoipCallEvent, WavoipRecordEvent } from '@
 
 export const maxDuration = 60
 
+// Forward every event to the original destination in parallel (fire-and-forget)
+const FORWARD_URL = 'https://inngest-prod.podiumeducacao.com.br/webhooks/wavoip'
+
+function forwardEvent(body: unknown, headers: Headers) {
+  const forwardHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+  // Preserve any auth/signature headers Wavoip sends
+  for (const key of ['authorization', 'x-wavoip-signature', 'x-webhook-secret']) {
+    const val = headers.get(key)
+    if (val) forwardHeaders[key] = val
+  }
+  fetch(FORWARD_URL, {
+    method: 'POST',
+    headers: forwardHeaders,
+    body: JSON.stringify(body),
+  }).catch(err => console.error('[forward] Error:', err))
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as WavoipWebhookPayload
+
+    // Forward to original destination before processing (non-blocking)
+    forwardEvent(body, req.headers)
 
     if (body.type === 'CALL') return handleCallEvent(body as WavoipCallEvent)
     if (body.type === 'RECORD') return handleRecordEvent(body as WavoipRecordEvent)
