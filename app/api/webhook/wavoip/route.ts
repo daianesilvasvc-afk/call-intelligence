@@ -49,7 +49,7 @@ async function handleCallEvent(body: WavoipCallEvent): Promise<NextResponse> {
   }
 
   const duration = body.duration ?? 0
-  if (duration < 180) {
+  if (duration < 120) {
     return NextResponse.json({ received: true, skipped: 'too_short' })
   }
 
