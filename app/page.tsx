@@ -762,6 +762,7 @@ function Dashboard() {
   const [metricsEnd, setMetricsEnd] = useState(todayStr)
   const [reprocessing, setReprocessing] = useState(false)
   const [reprocessResult, setReprocessResult] = useState<string | null>(null)
+  const [clearing, setClearing] = useState(false)
 
   const fetchData = useCallback(async () => {
     try {
@@ -840,6 +841,17 @@ function Dashboard() {
       setReprocessResult('Erro de conexão')
     } finally {
       setReprocessing(false)
+    }
+  }
+
+  async function handleClearPending() {
+    if (!confirm(`Deletar todos os ${stats?.processing ?? ''} pendentes? Essa ação não pode ser desfeita.`)) return
+    setClearing(true)
+    try {
+      await fetch('/api/clear-pending', { method: 'POST' })
+      fetchData()
+    } finally {
+      setClearing(false)
     }
   }
 
@@ -1025,6 +1037,14 @@ function Dashboard() {
                   ) : (
                     <>⟳ Reprocessar pendentes ({stats.processing})</>
                   )}
+                </button>
+                <button
+                  onClick={handleClearPending}
+                  disabled={clearing}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                  style={{ background: '#2d1a1a', color: '#f87171', border: '1px solid #5a2a2a' }}
+                >
+                  {clearing ? 'Deletando...' : `🗑 Limpar pendentes`}
                 </button>
                 {reprocessResult && (
                   <span className="text-xs text-gray-400">{reprocessResult}</span>

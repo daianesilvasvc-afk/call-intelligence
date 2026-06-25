@@ -226,6 +226,14 @@ const ENV_MAP: Record<string, string> = {
   groq_api_key: 'GROQ_API_KEY',
 }
 
+export async function clearPendingCalls(): Promise<number> {
+  await ensureSchema()
+  const { rowsAffected } = await execute(`DELETE FROM calls WHERE status = 'pending'`)
+  return rowsAffected
+}
+
+// --- Settings ---
+
 export async function getSetting(key: string): Promise<string | null> {
   const envKey = ENV_MAP[key]
   if (envKey && process.env[envKey]) return process.env[envKey]!
