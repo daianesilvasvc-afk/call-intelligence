@@ -763,6 +763,7 @@ function Dashboard() {
   const [reprocessing, setReprocessing] = useState(false)
   const [reprocessResult, setReprocessResult] = useState<string | null>(null)
   const [clearing, setClearing] = useState(false)
+  const [clearingAll, setClearingAll] = useState(false)
 
   const fetchData = useCallback(async () => {
     try {
@@ -852,6 +853,17 @@ function Dashboard() {
       fetchData()
     } finally {
       setClearing(false)
+    }
+  }
+
+  async function handleClearAll() {
+    if (!confirm('Deletar TODO o histórico de ligações? Essa ação não pode ser desfeita.')) return
+    setClearingAll(true)
+    try {
+      await fetch('/api/clear-all', { method: 'POST' })
+      fetchData()
+    } finally {
+      setClearingAll(false)
     }
   }
 
@@ -1044,7 +1056,15 @@ function Dashboard() {
                   className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
                   style={{ background: '#2d1a1a', color: '#f87171', border: '1px solid #5a2a2a' }}
                 >
-                  {clearing ? 'Deletando...' : `🗑 Limpar pendentes`}
+                  {clearing ? 'Deletando...' : '🗑 Limpar pendentes'}
+                </button>
+                <button
+                  onClick={handleClearAll}
+                  disabled={clearingAll}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                  style={{ background: '#2d1a1a', color: '#f87171', border: '1px solid #5a2a2a' }}
+                >
+                  {clearingAll ? 'Deletando...' : '🗑 Limpar histórico'}
                 </button>
                 {reprocessResult && (
                   <span className="text-xs text-gray-400">{reprocessResult}</span>

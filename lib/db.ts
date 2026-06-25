@@ -232,6 +232,12 @@ export async function clearPendingCalls(): Promise<number> {
   return rowsAffected
 }
 
+export async function clearAllCalls(): Promise<number> {
+  await ensureSchema()
+  const { rowsAffected } = await execute(`DELETE FROM calls`)
+  return rowsAffected
+}
+
 // --- Settings ---
 
 export async function getSetting(key: string): Promise<string | null> {
