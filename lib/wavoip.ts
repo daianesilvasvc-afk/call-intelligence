@@ -1,8 +1,9 @@
 export interface WavoipCallEvent {
   type: 'CALL'
   action: 'CREATE' | 'UPDATE'
-  whatsapp_call_id: number
+  whatsapp_call_id: string | number
   id_session: number
+  idUser?: number
   caller: string
   receiver: string
   status:
@@ -17,7 +18,7 @@ export interface WavoipCallEvent {
 export interface WavoipRecordEvent {
   type: 'RECORD'
   action: 'UPDATE'
-  whatsapp_call_id: number
+  whatsapp_call_id: string | number
   id_session: number
   record_status: 'READY' | 'RECORDING' | 'MIXING' | 'DISABLED' | 'EMPTY_RECORDING'
   record_url?: string
