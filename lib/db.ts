@@ -224,6 +224,7 @@ export async function getStats(sdr?: string, date?: string) {
 const ENV_MAP: Record<string, string> = {
   wavoip_token: 'WAVOIP_TOKEN',
   groq_api_key: 'GROQ_API_KEY',
+  threec_api_token: 'THREEC_API_TOKEN',
 }
 
 export async function clearPendingCalls(): Promise<number> {

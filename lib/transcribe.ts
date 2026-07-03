@@ -4,8 +4,8 @@ function getGroq() {
   return new Groq({ apiKey: process.env.GROQ_API_KEY })
 }
 
-export async function transcribeAudio(audioUrl: string): Promise<string> {
-  const response = await fetch(audioUrl)
+export async function transcribeAudio(audioUrl: string, fetchHeaders?: Record<string, string>): Promise<string> {
+  const response = await fetch(audioUrl, fetchHeaders ? { headers: fetchHeaders } : undefined)
   if (!response.ok) {
     throw new Error(`Falha ao baixar áudio: ${response.status} ${response.statusText}`)
   }
