@@ -71,8 +71,8 @@ function SettingsModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
   }
 
   const webhookUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/api/webhook/wavoip`
-    : '/api/webhook/wavoip'
+    ? `${window.location.origin}/api/webhook/3c`
+    : '/api/webhook/3c'
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -83,25 +83,10 @@ function SettingsModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
         </div>
         <div className="p-6 space-y-5">
           <div className="bg-gray-950 border border-gray-700 rounded-lg p-3">
-            <p className="text-xs font-medium text-gray-400 mb-1.5">URL do Webhook — Wavoip</p>
+            <p className="text-xs font-medium text-gray-400 mb-1.5">URL do Webhook — 3C</p>
             <p className="text-xs font-mono text-emerald-400 break-all">{webhookUrl}</p>
             <p className="text-xs text-gray-600 mt-1.5">
-              Wavoip → Dispositivo → Integrações → Webhook
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1.5">
-              Token — Wavoip <span className="text-gray-600 font-normal">(opcional)</span>
-            </label>
-            <input
-              type="password"
-              value={token}
-              onChange={e => setToken(e.target.value)}
-              placeholder="Token do dispositivo Wavoip"
-              className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
-            />
-            <p className="text-xs text-gray-600 mt-1">
-              Wavoip → Dispositivo → Configurações
+              3C → Configurações → Webhooks
             </p>
           </div>
           <div>
@@ -786,8 +771,6 @@ function Dashboard() {
 
   useEffect(() => {
     fetchData()
-    const interval = setInterval(fetchData, 10_000)
-    return () => clearInterval(interval)
   }, [fetchData])
 
   async function handleSync() {
@@ -1078,8 +1061,8 @@ function Dashboard() {
         {isConfigured && (
           <div className="flex items-center gap-3 mb-6 bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
             <span className="text-xs text-gray-500 shrink-0">Webhook ativo:</span>
-            <span className="text-xs font-mono text-emerald-400 truncate">/api/webhook/wavoip</span>
-            <span className="ml-auto text-xs text-gray-600">As ligações chegam automaticamente pelo Wavoip</span>
+            <span className="text-xs font-mono text-emerald-400 truncate">/api/webhook/3c</span>
+            <span className="ml-auto text-xs text-gray-600">As ligações chegam automaticamente pelo 3C</span>
           </div>
         )}
 
@@ -1091,7 +1074,7 @@ function Dashboard() {
             <p className="text-4xl mb-3">📞</p>
             <p className="text-gray-400 font-medium">Nenhuma ligação ainda</p>
             <p className="text-gray-600 text-sm mt-1">
-              {isConfigured ? 'Clique em "Sincronizar" para buscar suas ligações' : 'Configure as credenciais primeiro'}
+              {isConfigured ? 'Aguardando ligações pelo webhook do 3C' : 'Configure as credenciais primeiro'}
             </p>
           </div>
         ) : (
