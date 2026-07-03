@@ -34,6 +34,6 @@ export interface WavoipDeviceEvent {
 
 export type WavoipWebhookPayload = WavoipCallEvent | WavoipRecordEvent | WavoipDeviceEvent
 
-export function buildRecordUrl(whatsapp_call_id: number): string {
+export function buildRecordUrl(whatsapp_call_id: string | number): string {
   return `https://storage.wavoip.com/${whatsapp_call_id}`
 }
