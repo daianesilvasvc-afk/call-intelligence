@@ -8,11 +8,17 @@ import { SDRS } from '@/lib/sdrs'
 interface Stats { total: number; today: number; done: number; processing: number }
 interface ApiResponse { calls: Call[]; stats: Stats }
 interface Settings { wavoip_token: string | null; groq_api_key: string | null }
-interface MetricRow {
-  sdr: string; date: string
-  total: number; connected: number; over50s: number; over3min: number
-  hitrate: number; hitrate50: number; hitrate3min: number
-  tma: number; totalDuration: number; numDiscado: number
+interface MetricsData {
+  totalCalls: number
+  avgTma: number
+  errorRate: number
+  avgScore: number
+  taxaAgendamento: number
+  avgBant: number
+  avgNotas: { investigacao: number; sonho: number; solucao: number; agendamento: number }
+  temperatura: Record<string, number>
+  sentiment: Record<string, number>
+  bySdr: Array<{ sdr: string; total: number; avgScore: number; agendamentos: number; avgTma: number }>
 }
 
 function formatDuration(s: number) {
@@ -658,21 +664,33 @@ function CallRow({ call, onAnalyze, onView }: {
 }
 
 // ─── Metrics View ────────────────────────────────────────────────────────────
-function fmtSec(s: number) {
-  const h = Math.floor(s / 3600)
-  const m = Math.floor((s % 3600) / 60)
+function fmtMin(s: number) {
+  const m = Math.floor(s / 60)
   const sec = s % 60
-  if (h > 0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
-  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+  return `${m}m ${sec}s`
 }
 
-function HitBadge({ value }: { value: number }) {
-  const cls = value >= 30 ? 'bg-emerald-500/20 text-emerald-400' : value >= 15 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'
-  return <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cls}`}>{value.toFixed(1)}%</span>
+function MiniBar({ value, color }: { value: number; color: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+        <div className="h-full rounded-full" style={{ width: `${Math.min(value, 100)}%`, background: color }} />
+      </div>
+      <span className="text-xs text-gray-400 w-8 text-right">{value}%</span>
+    </div>
+  )
 }
 
-function MetricsView({ rows, loading, startDate, endDate, onStartChange, onEndChange, onFetch }: {
-  rows: MetricRow[] | null
+function ScoreTag({ score }: { score: number }) {
+  if (score >= 80) return <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">≥ 80%</span>
+  if (score >= 60) return <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">61–80%</span>
+  return <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-500/20 text-red-400 border border-red-500/30">&lt; 60%</span>
+}
+
+function MetricsView({
+  data, loading, startDate, endDate, onStartChange, onEndChange, onFetch,
+}: {
+  data: MetricsData | null
   loading: boolean
   startDate: string
   endDate: string
@@ -681,9 +699,9 @@ function MetricsView({ rows, loading, startDate, endDate, onStartChange, onEndCh
   onFetch: () => void
 }) {
   return (
-    <div>
+    <div className="space-y-6">
       {/* Controls */}
-      <div className="flex items-center gap-2 flex-wrap mb-6">
+      <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-gray-500 font-medium">Período:</span>
         <input type="date" value={startDate} onChange={e => onStartChange(e.target.value)}
           className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]" />
@@ -692,58 +710,130 @@ function MetricsView({ rows, loading, startDate, endDate, onStartChange, onEndCh
           className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]" />
         <button onClick={onFetch} disabled={loading}
           className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors">
-          {loading ? '⏳ Carregando...' : '↻ Carregar métricas'}
+          {loading ? '⏳ Carregando...' : '↻ Carregar'}
         </button>
       </div>
 
-      {!rows && !loading && (
-        <p className="text-center text-gray-500 py-20">Selecione o período e clique em "Carregar métricas"</p>
+      {!data && !loading && (
+        <p className="text-center text-gray-500 py-20">Selecione o período e clique em "Carregar"</p>
       )}
       {loading && <p className="text-center text-gray-500 py-20">Carregando...</p>}
 
-      {rows && rows.length === 0 && (
-        <p className="text-center text-gray-500 py-20">Nenhuma ligação encontrada no período</p>
-      )}
-
-      {rows && rows.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-gray-800">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-800 bg-gray-900/60">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Data</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">SDR</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Total</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Atend. &gt;50s</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Atend. &gt;3min</th>
-                <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">HitRate</th>
-                <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">HR &gt;50s</th>
-                <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">HR &gt;3min</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">TMA</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">T. Total</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">N. Discado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-900/40 transition-colors">
-                  <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
-                    {new Date(r.date + 'T12:00:00').toLocaleDateString('pt-BR')}
-                  </td>
-                  <td className="px-4 py-3 text-white font-medium">{r.sdr}</td>
-                  <td className="px-4 py-3 text-right text-white font-bold">{r.total}</td>
-                  <td className="px-4 py-3 text-right text-gray-300">{r.over50s}</td>
-                  <td className="px-4 py-3 text-right text-gray-300">{r.over3min}</td>
-                  <td className="px-4 py-3 text-center"><HitBadge value={r.hitrate} /></td>
-                  <td className="px-4 py-3 text-center"><HitBadge value={r.hitrate50} /></td>
-                  <td className="px-4 py-3 text-center"><HitBadge value={r.hitrate3min} /></td>
-                  <td className="px-4 py-3 text-right text-gray-300 font-mono">{fmtSec(r.tma)}</td>
-                  <td className="px-4 py-3 text-right text-gray-300 font-mono">{fmtSec(r.totalDuration)}</td>
-                  <td className="px-4 py-3 text-right text-gray-300">{r.numDiscado}</td>
-                </tr>
+      {data && (
+        <>
+          {/* Bloco 1 — Volume */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Volume e produção</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: 'Ligações analisadas', value: String(data.totalCalls), sub: 'no período' },
+                { label: 'Duração média (TMA)', value: fmtMin(data.avgTma), sub: 'ligações > 2min' },
+                { label: 'Taxa de erro', value: `${data.errorRate}%`, sub: 'caixa postal / muda', warn: data.errorRate > 15 },
+                { label: 'Total agendamentos', value: String(data.bySdr.reduce((s, r) => s + r.agendamentos, 0)), sub: `${data.taxaAgendamento}% das analisadas` },
+              ].map((c, i) => (
+                <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                  <p className="text-xs text-gray-500 mb-1">{c.label}</p>
+                  <p className={`text-2xl font-bold ${c.warn ? 'text-red-400' : 'text-white'}`}>{c.value}</p>
+                  <p className="text-xs text-gray-600 mt-1">{c.sub}</p>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </div>
+
+          {/* Bloco 2 — Qualidade NEPQ */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Qualidade NEPQ</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <p className="text-xs text-gray-500 mb-1">Score médio geral</p>
+                <p className={`text-2xl font-bold ${data.avgScore >= 80 ? 'text-emerald-400' : data.avgScore >= 60 ? 'text-yellow-400' : 'text-red-400'}`}>{data.avgScore}%</p>
+                <p className="text-xs text-gray-600 mt-1">meta: ≥ 75%</p>
+              </div>
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <p className="text-xs text-gray-500 mb-1">Taxa de agendamento</p>
+                <p className={`text-2xl font-bold ${data.taxaAgendamento >= 30 ? 'text-emerald-400' : 'text-yellow-400'}`}>{data.taxaAgendamento}%</p>
+                <p className="text-xs text-gray-600 mt-1">das ligações analisadas</p>
+              </div>
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <p className="text-xs text-gray-500 mb-1">Score BANT médio</p>
+                <p className="text-2xl font-bold text-white">{data.avgBant}<span className="text-sm text-gray-500">/4</span></p>
+                <p className="text-xs text-gray-600 mt-1">qualidade dos leads</p>
+              </div>
+            </div>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
+              <p className="text-xs text-gray-500">Nota média por critério NEPQ</p>
+              {([
+                ['1 · Investigação', data.avgNotas.investigacao],
+                ['2 · Sonho', data.avgNotas.sonho],
+                ['3 · Solução', data.avgNotas.solucao],
+                ['4 · Agendamento', data.avgNotas.agendamento],
+              ] as [string, number][]).map(([label, nota]) => (
+                <div key={label} className="flex items-center gap-3">
+                  <span className="text-xs text-gray-400 w-28 flex-shrink-0">{label}</span>
+                  <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all"
+                      style={{ width: `${(nota / 5) * 100}%`, background: nota >= 4 ? '#34d399' : nota >= 3 ? '#fbbf24' : '#f87171' }} />
+                  </div>
+                  <span className="text-xs font-bold text-gray-300 w-8 text-right">{nota}/5</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Bloco 3 — Perfil dos leads */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Perfil dos leads</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-2">
+                <p className="text-xs text-gray-500 mb-3">Temperatura</p>
+                {(['PRONTO PRA COMPRAR', 'QUENTE', 'MORNO', 'FRIO'] as const).map(t => {
+                  const colors: Record<string, string> = { 'PRONTO PRA COMPRAR': '#34d399', QUENTE: '#f97316', MORNO: '#fbbf24', FRIO: '#60a5fa' }
+                  const labels: Record<string, string> = { 'PRONTO PRA COMPRAR': '✅ Pronto', QUENTE: '🔥 Quente', MORNO: '🌤 Morno', FRIO: '❄️ Frio' }
+                  return (
+                    <div key={t} className="flex items-center gap-3">
+                      <span className="text-xs text-gray-400 w-24 flex-shrink-0">{labels[t]}</span>
+                      <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${data.temperatura[t] ?? 0}%`, background: colors[t] }} />
+                      </div>
+                      <span className="text-xs text-gray-400 w-8 text-right">{data.temperatura[t] ?? 0}%</span>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-2">
+                <p className="text-xs text-gray-500 mb-3">Sentimento da ligação</p>
+                {([['😊 Positivo', 'positivo', '#34d399'], ['😐 Neutro', 'neutro', '#fbbf24'], ['😟 Negativo', 'negativo', '#f87171']] as const).map(([label, key, color]) => (
+                  <div key={key} className="flex items-center gap-3">
+                    <span className="text-xs text-gray-400 w-24 flex-shrink-0">{label}</span>
+                    <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${data.sentiment[key] ?? 0}%`, background: color }} />
+                    </div>
+                    <span className="text-xs text-gray-400 w-8 text-right">{data.sentiment[key] ?? 0}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Bloco 4 — Por SDR */}
+          {data.bySdr.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Por SDR</p>
+              <div className="bg-gray-900 border border-gray-800 rounded-xl divide-y divide-gray-800">
+                {data.bySdr.map(r => (
+                  <div key={r.sdr} className="flex items-center gap-4 px-4 py-3 flex-wrap">
+                    <span className="text-sm font-semibold text-white w-20">{r.sdr}</span>
+                    <span className="text-xs text-gray-400">Score: <span className="text-white font-bold">{r.avgScore}%</span></span>
+                    <span className="text-xs text-gray-400">Agend: <span className="text-white font-bold">{r.agendamentos}</span></span>
+                    <span className="text-xs text-gray-400">Ligações: <span className="text-white font-bold">{r.total}</span></span>
+                    <span className="text-xs text-gray-400">TMA: <span className="text-white font-bold">{fmtMin(r.avgTma)}</span></span>
+                    <div className="ml-auto"><ScoreTag score={r.avgScore} /></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
@@ -776,7 +866,7 @@ function Dashboard() {
   const [showSettings, setShowSettings] = useState(false)
   const [selectedCall, setSelectedCall] = useState<Call | null>(null)
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set())
-  const [metrics, setMetrics] = useState<MetricRow[] | null>(null)
+  const [metrics, setMetrics] = useState<MetricsData | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(false)
   const [metricsStart, setMetricsStart] = useState(todayStr)
   const [metricsEnd, setMetricsEnd] = useState(todayStr)
@@ -891,7 +981,7 @@ function Dashboard() {
     try {
       const res = await fetch(`/api/metrics?startDate=${metricsStart}&endDate=${metricsEnd}`)
       const json = await res.json()
-      if (json.rows) setMetrics(json.rows)
+      if (!json.error) setMetrics(json)
     } finally {
       setMetricsLoading(false)
     }
@@ -962,7 +1052,7 @@ function Dashboard() {
         {/* Metrics tab */}
         {activeTab === 'metrics' && (
           <MetricsView
-            rows={metrics}
+            data={metrics}
             loading={metricsLoading}
             startDate={metricsStart}
             endDate={metricsEnd}

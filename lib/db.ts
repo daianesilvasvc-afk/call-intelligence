@@ -190,6 +190,18 @@ export async function getCallById(id: string): Promise<Call | null> {
   return (rows[0] ?? null) as unknown as Call | null
 }
 
+export async function getCallsInRange(startDate: string, endDate: string, sdr?: string): Promise<Call[]> {
+  await ensureSchema()
+  const conditions = ['date(started_at) >= ?', 'date(started_at) <= ?']
+  const args: unknown[] = [startDate, endDate]
+  if (sdr) { conditions.push('(caller = ? OR called = ?)'); args.push(sdr, sdr) }
+  const { rows } = await execute(
+    `SELECT * FROM calls WHERE ${conditions.join(' AND ')} ORDER BY started_at DESC LIMIT 2000`,
+    args
+  )
+  return rows as unknown as Call[]
+}
+
 export async function getCallByCallId(callId: string): Promise<Call | null> {
   await ensureSchema()
   const { rows } = await execute('SELECT * FROM calls WHERE call_id = ?', [callId])
