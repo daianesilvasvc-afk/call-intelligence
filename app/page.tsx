@@ -274,24 +274,37 @@ function CallModal({ call, onClose }: { call: Call; onClose: () => void }) {
           {nepq && (
             <section className="space-y-4">
               {/* Score + Temperatura */}
-              <div className="flex items-center justify-between bg-gray-800/60 border border-gray-700 rounded-xl px-5 py-4">
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">📊 Score do Script</p>
-                  <p className={`text-2xl font-bold ${
-                    nepq.score_script >= 80 ? 'text-emerald-400'
-                    : nepq.score_script >= 60 ? 'text-yellow-400'
-                    : 'text-red-400'
-                  }`}>{nepq.score_script}%</p>
+              <div className="bg-gray-800/60 border border-gray-700 rounded-xl px-5 py-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">📊 Score do Script</p>
+                    <p className={`text-2xl font-bold ${
+                      nepq.score_script >= 80 ? 'text-emerald-400'
+                      : nepq.score_script >= 60 ? 'text-yellow-400'
+                      : 'text-red-400'
+                    }`}>{nepq.score_script}%</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">🌡 Temperatura</p>
+                    <TempBadge temp={nepq.temperatura?.classificacao} />
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">🌡 Temperatura</p>
-                  <TempBadge temp={nepq.temperatura?.classificacao} />
-                </div>
+                {nepq.score_justificativa && (
+                  <p className="text-xs text-gray-400 leading-relaxed border-t border-gray-700 pt-3">{nepq.score_justificativa}</p>
+                )}
               </div>
+
+              {/* Feedback intro do líder */}
+              {nepq.sdr_feedback_intro && (
+                <div className="bg-gray-900/80 border-l-4 border-yellow-500/60 rounded-r-xl px-4 py-3">
+                  <p className="text-xs text-yellow-500/80 uppercase tracking-wider font-semibold mb-1">🧠 Feedback do Líder</p>
+                  <p className="text-sm text-yellow-100/90 font-medium italic">"{nepq.sdr_feedback_intro}"</p>
+                </div>
+              )}
 
               {/* Critérios NEPQ */}
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Critérios NEPQ</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Critérios NEPQ — Voz do Líder</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {nepq.investigacao && <NepqCriterionBlock label="1 · Investigação da Dor" criterion={nepq.investigacao} />}
                   {nepq.sonho && <NepqCriterionBlock label="2 · Descoberta do Sonho" criterion={nepq.sonho} />}
@@ -299,6 +312,14 @@ function CallModal({ call, onClose }: { call: Call; onClose: () => void }) {
                   {nepq.agendamento && <NepqCriterionBlock label="4 · Agendamento" criterion={{ ...nepq.agendamento, trecho_principal: nepq.agendamento.trecho_oferta }} />}
                 </div>
               </div>
+
+              {/* Resumo do líder */}
+              {nepq.resumo_lider && (
+                <div className="bg-yellow-950/20 border border-yellow-700/30 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-yellow-500/80 uppercase tracking-wider mb-2">📌 Resumo do Líder</p>
+                  <p className="text-sm text-gray-300 leading-relaxed">{nepq.resumo_lider}</p>
+                </div>
+              )}
 
               {/* Ponto de perda */}
               {nepq.agendamento?.perda_agendamento?.ocorreu && (
