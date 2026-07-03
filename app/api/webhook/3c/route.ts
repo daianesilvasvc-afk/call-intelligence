@@ -18,7 +18,8 @@ export async function POST(req: NextRequest) {
 
     const h = event.callHistory
 
-    const duration = h.calling_time ?? 0
+    // billed_time = duração real da chamada em segundos; calling_time = tempo de ring
+    const duration = h.billed_time ?? h.speaking_time ?? 0
     if (duration < 120) {
       return NextResponse.json({ received: true, skipped: 'too_short', duration })
     }
