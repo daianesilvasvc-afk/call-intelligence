@@ -89,7 +89,19 @@ function triggerAnalysis(
       console.log(`[${id}] Transcribing ${recordUrl}`)
       const transcript = await transcribeAudio(recordUrl, headers)
 
-      console.log(`[${id}] Analyzing transcript`)
+      // Detecta caixa postal / ligação muda: menos de 60 palavras na transcrição
+      const wordCount = transcript.trim().split(/\s+/).filter(Boolean).length
+      if (wordCount < 60) {
+        console.log(`[${id}] Skipped — transcript too short (${wordCount} words), likely voicemail or muted call`)
+        await updateCallAnalysis(id, {
+          transcript,
+          status: 'error',
+          error: `Ligação sem conteúdo (${wordCount} palavras) — possível caixa postal ou chamada muda`,
+        })
+        return
+      }
+
+      console.log(`[${id}] Analyzing transcript (${wordCount} words)`)
       const analysis = await analyzeCall(transcript, { caller, called, duration, direction })
 
       await updateCallAnalysis(id, {
