@@ -22,6 +22,19 @@ function formatDate(d: string) {
   return new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
 }
 
+function ScoreBadge({ nepqJson }: { nepqJson: string | null }) {
+  if (!nepqJson) return null
+  let score: number | null = null
+  try { score = JSON.parse(nepqJson)?.score_script ?? null } catch { return null }
+  if (score === null) return null
+  const cls = score >= 80 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+    : score >= 60 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+    : 'bg-red-500/20 text-red-400 border-red-500/30'
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full font-bold border ${cls}`}>{score}%</span>
+  )
+}
+
 function SentimentBadge({ sentiment }: { sentiment: string | null }) {
   if (!sentiment) return null
   const map: Record<string, { label: string; cls: string }> = {
@@ -605,6 +618,7 @@ function CallRow({ call, onAnalyze, onView }: {
           </span>
           <StatusBadge status={call.status} />
           <SentimentBadge sentiment={call.sentiment} />
+          <ScoreBadge nepqJson={call.nepq_analysis} />
         </div>
         <p className="text-xs text-gray-500">
           {formatDate(call.started_at)} · {formatDuration(call.duration)} · {isOut ? 'Ativa' : 'Receptiva'}
