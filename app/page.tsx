@@ -749,6 +749,7 @@ function Dashboard() {
   const [reprocessResult, setReprocessResult] = useState<string | null>(null)
   const [clearing, setClearing] = useState(false)
   const [clearingAll, setClearingAll] = useState(false)
+  const [dateInput, setDateInput] = useState(activeDate)
 
   const fetchData = useCallback(async () => {
     try {
@@ -971,12 +972,18 @@ function Dashboard() {
             <input
               type="date"
               value={activeDate}
-              onChange={e => router.push(buildUrl(activeSdr, e.target.value))}
+              onChange={e => setDateInput(e.target.value)}
               className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]"
             />
+            <button
+              onClick={() => { router.push(buildUrl(activeSdr, dateInput)); fetchData() }}
+              className="text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-lg transition-colors font-medium"
+            >
+              Buscar
+            </button>
             {activeDate && (
               <button
-                onClick={() => router.push(buildUrl(activeSdr, ''))}
+                onClick={() => { setDateInput(''); router.push(buildUrl(activeSdr, '')); fetchData() }}
                 className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1.5 rounded-lg border border-gray-800 hover:border-gray-600 transition-colors"
               >
                 ✕ Limpar data
