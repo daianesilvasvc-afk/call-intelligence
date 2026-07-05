@@ -7,7 +7,7 @@ import { SDRS } from '@/lib/sdrs'
 
 interface Stats { total: number; today: number; done: number; processing: number }
 interface ApiResponse { calls: Call[]; stats: Stats }
-interface Settings { wavoip_token: string | null; groq_api_key: string | null }
+interface Settings { groq_api_key: string | null }
 interface MetricsData {
   totalCalls: number
   avgTma: number
@@ -65,7 +65,6 @@ function StatusBadge({ status }: { status: string }) {
 
 // ─── Settings Modal ─────────────────────────────────────────────────────────
 function SettingsModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [token, setToken] = useState('')
   const [groq, setGroq] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -78,7 +77,7 @@ function SettingsModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
       await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wavoip_token: token || undefined, groq_api_key: groq }),
+        body: JSON.stringify({ groq_api_key: groq }),
       })
       onSaved()
       onClose()
