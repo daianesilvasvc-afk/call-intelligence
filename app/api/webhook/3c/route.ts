@@ -6,7 +6,16 @@ import { analyzeCall } from '@/lib/analyze'
 
 export const maxDuration = 60
 
-const SDR_NAMES = new Set(['Adriele', 'Luan', 'Nátali'])
+// Normalized for accent/case-insensitive matching — 3C Plus may send different spellings
+const SDR_CANONICAL: Record<string, string> = {
+  'adriele': 'Adriele',
+  'luan':    'Luan',
+  'natali':  'Nátali',
+}
+
+function normalizeAgentName(name: string): string {
+  return name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,9 +37,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true, skipped: 'no_recording' })
     }
 
-    const agentName: string | null = h.agent?.name ?? null
-    if (!agentName || !SDR_NAMES.has(agentName)) {
-      return NextResponse.json({ received: true, skipped: 'unknown_agent', agentName })
+    const rawAgentName: string | null = h.agent?.name ?? null
+    const agentName = rawAgentName ? (SDR_CANONICAL[normalizeAgentName(rawAgentName)] ?? null) : null
+    if (!agentName) {
+      return NextResponse.json({ received: true, skipped: 'unknown_agent', agentName: rawAgentName })
     }
 
     const callId: string = h._id
