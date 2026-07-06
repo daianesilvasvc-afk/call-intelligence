@@ -123,12 +123,22 @@ export interface CallAnalysis {
 }
 
 // ─── Main function ────────────────────────────────────────────────────────────
+// Groq free tier: 12,000 TPM. Prompt alone is ~5,000 tokens + output 6,000 = 11,000 reserved.
+// Transcript budget: ~3,500 tokens ≈ 12,000 chars. Keep start + end (most relevant for NEPQ).
+function truncateTranscript(text: string, maxChars = 12000): string {
+  if (text.length <= maxChars) return text
+  const head = Math.floor(maxChars * 0.65)
+  const tail = maxChars - head
+  return text.slice(0, head) + '\n\n[... trecho central omitido por limite de tamanho ...]\n\n' + text.slice(-tail)
+}
+
 export async function analyzeCall(
   transcript: string,
   callMeta: { caller: string; called: string; duration: number; direction: string }
 ): Promise<CallAnalysis> {
   const min = Math.floor(callMeta.duration / 60)
   const sec = callMeta.duration % 60
+  const safeTranscript = truncateTranscript(transcript)
 
   const prompt = `AGENTE DE ANÁLISE DE LIGAÇÕES — PRÉ-VENDAS PODIUM
 MÉTODO NEPQ + BANT v4.1 — FEEDBACK DE LÍDER + BRIEFING DO CLOSER
@@ -280,7 +290,7 @@ SDR: ${callMeta.caller} | Lead: ${callMeta.called}
 Duração: ${min}min ${sec}s | ${callMeta.direction === 'outbound' ? 'Ativa (SDR ligou)' : 'Receptiva (lead ligou)'}
 
 ━━━ TRANSCRIÇÃO ━━━
-${transcript}
+${safeTranscript}
 
 ━━━ INSTRUÇÃO DE SAÍDA ━━━
 Retorne APENAS um JSON válido (sem markdown, sem texto fora do JSON).
